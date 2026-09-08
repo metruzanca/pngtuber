@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/grafov/evdev v1.0.0
 	github.com/hajimehoshi/ebiten/v2 v2.9.11
 )
 

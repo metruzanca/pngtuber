@@ -34,7 +34,7 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 ### Current progress
 - [x] Review + port plan to Go + Ebitengine (this doc)
 - [x] Milestone 1: Bootstrap + transparent window
-- [ ] Milestone 2: Global input pipeline
+- [x] Milestone 2: Global input pipeline
 - [ ] Milestone 3: Mic capture
 - [ ] Milestone 4: Activity state machine
 - [ ] Milestone 5: Character animation
@@ -285,7 +285,7 @@ from the scene**, not guessed.
 | # | Milestone | Deliverable | Exit criteria | Status |
 |---|---|---|---|---|
 | 1 | Bootstrap + transparent window | Ebitengine app, transparent undecorated window, test sprite, OBS guide stub | Window renders alpha correctly in OBS Game Capture (Allow Transparency) on X11 and Wayland(XWayland) | ✅ |
-| 2 | Global input pipeline | evdev goroutine → `ActivitySignals`; activity logged to console | Keystrokes/mouse motion while another app is focused flip counters; no crash without `/dev/input` perms | ☐ |
+| 2 | Global input pipeline | evdev goroutine → `ActivitySignals`; activity logged to console | Keystrokes/mouse motion while another app is focused flip counters; no crash without `/dev/input` perms | ✅ |
 | 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ☐ |
 | 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ☐ |
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ☐ |
@@ -368,6 +368,17 @@ needs X11/OpenGL dev headers to build and GL libs on the runtime loader path. Th
 "pure Go, no cgo" assumption was corrected in §2/§3 and handled via `shell.nix`.
 
 Next slice: **Milestone 2** — evdev goroutine → `ActivitySignals`, logged to console.
+
+**Milestone 2 (done):** `input/` package — `GlobalInputBackend` trait + `ActivitySignals`
+counters + bounded-channel `Drain` (`input.go`); Linux `grafov/evdev` backend that scans
+`/dev/input/event*`, filters to keyboard/pointer devices, and classifies events into
+`KeyActivity`/`MouseActivity` per device-goroutine (`evdev_linux.go`, `go:build linux`); non-Linux
+no-op stub. `main.go` spawns the backend at startup, drains it into `ActivitySignals` each tick, and
+logs one summary line per active tick plus on-screen counters. Without `/dev/input` perms it logs an
+actionable `usermod -aG input` warning and keeps running (mic-only mode) instead of crashing.
+Verified: `go test ./...`, `go vet`, `go build`, `gofmt` clean; smoke run showed real mouse events
+filling counters while another app had focus. `github.com/grafov/evdev v1.0.0` added (uses cgo —
+`linux/input.h` headers needed at build time, provided by `shell.nix`).
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`

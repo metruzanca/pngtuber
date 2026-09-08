@@ -9,6 +9,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/metruzanca/pngtuber/input"
 )
 
 const (
@@ -17,13 +18,15 @@ const (
 )
 
 // Game is the top-level Ebitengine game. Milestone 1: transparent window + test
-// sprite. Subsystems (input, mic, activity, character controller) plug in here
-// in later milestones.
+// sprite. Milestone 2: global input pipeline (evdev -> ActivitySignals).
+// Subsystems (mic, activity, character controller) plug in here later.
 type Game struct {
 	cfg    *Config
 	sheet  *ebiten.Image
 	sprite *ebiten.Image
 	angle  float64
+	input  input.Backend
+	sigs   input.ActivitySignals
 }
 
 func NewGame() (*Game, error) {
@@ -42,11 +45,13 @@ func NewGame() (*Game, error) {
 	fw, fh := cfg.Character.FrameSize.Width, cfg.Character.FrameSize.Height
 	sprite := sheet.SubImage(image.Rect(0, 0, fw, fh)).(*ebiten.Image)
 
-	return &Game{
+	g := &Game{
 		cfg:    cfg,
 		sheet:  sheet,
 		sprite: sprite,
-	}, nil
+	}
+	g.input = input.NewBackend()
+	return g, nil
 }
 
 func (g *Game) Update() error {
@@ -55,11 +60,23 @@ func (g *Game) Update() error {
 		return ebiten.Termination
 	}
 
+	g.pollInput()
+
 	// Test sprite gently looks toward the cursor (placeholder for cursor
 	// tracking in Milestone 5). Screen center -> cursor vector.
 	cx, cy := ebiten.CursorPosition()
 	g.angle = math.Atan2(float64(cy-screenH/2), float64(cx-screenW/2))
 	return nil
+}
+
+// pollInput drains the global input backend into ActivitySignals each tick
+// and logs a one-line summary whenever activity was observed.
+func (g *Game) pollInput() {
+	n := g.sigs.Drain(g.input.Signals())
+	if n > 0 {
+		log.Printf("input: drained %d event(s) this tick — totals key=%d mouse=%d",
+			n, g.sigs.KeyCount, g.sigs.MouseCount)
+	}
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -69,7 +86,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate(screenW/2, screenH/2)
 	screen.DrawImage(g.sprite, op)
 
-	ebitenutil.DebugPrint(screen, "M1: transparent window")
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("M2: input key=%d mouse=%d",
+		g.sigs.KeyCount, g.sigs.MouseCount))
 }
 
 func (g *Game) Layout(outsideW, outsideH int) (int, int) {
@@ -81,6 +99,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer g.input.Close()
 
 	ebiten.SetWindowSize(screenW, screenH)
 	ebiten.SetWindowTitle("pngtuber")
