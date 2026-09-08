@@ -39,7 +39,8 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 - [ ] Milestone 4: Activity state machine
 - [ ] Milestone 5: Character animation
 - [ ] Milestone 6: Config manifest
-- [ ] Milestone 7: Asset integration
+- [ ] Milestone 7: Asset data dir + first skin
+- [ ] Milestone 8: Asset integration (more skins)
 
 ### Non-Goals (current phase)
 - Click-through window or always-on-top behavior (OBS positions the element).
@@ -96,18 +97,22 @@ needed for mic (Milestone 3+). No `libasound2-dev`/`alsa-lib-devel` required.
 ├── go.mod / go.sum
 ├── main.go               # Game struct: window setup, RunGameWithOptions, wire subsystems
 ├── config.go             # Character manifest types + TOML loader (BurntSushi/toml)
+├── assets.go             # Asset directory resolution (env/flag/XDG data dir)
 ├── activity.go           # ActivityState enum, signal merging, idle timer, transitions
 ├── input/
 │   ├── input.go          # GlobalInputBackend trait + ActivitySignals counters
 │   └── evdev_linux.go    # grafov/evdev polling (go:build linux)
 ├── mic.go                # jfreymuth/pulse record stream -> smoothed loudness
-├── character.go          # sprite draw, state->frame controller, idle/sleep/cursor visuals
+├── character.go          # rig composition, state->part controller, cursor visuals
 ├── window.go             # (optional) transparent window / RunGameOptions helper
-├── assets/
-│   └── character/
-│       ├── spritesheet.png
-│       └── manifest.toml # maps state names to frame ranges + fps
-└── README.md             # /dev/input perms, PulseAudio, OBS capture steps
+├── docs/
+│   └── bitbuddy-assets.md # extracting BitBuddy assets (copyrighted, not distributed)
+└── README.md             # /dev/input perms, PulseAudio, OBS capture, asset install
+
+# User assets live OUTSIDE the repo (not committed; e.g. copyrighted game assets).
+# Linux: $XDG_DATA_HOME/pngtuber/assets  (default ~/.local/share/pngtuber/assets)
+~/.local/share/pngtuber/assets/
+└── manifest.toml         # rig schema (states -> parts + offsets)
 ```
 
 > There is no ECS. The `Game` struct implements `ebiten.Game` (`Update`, `Draw`, `Layout`) and holds
@@ -187,32 +192,44 @@ const (
 
 ### 5.5 Character & animation (`character.go`)
 
-- Load one sheet as an `ebiten.Image`; each state maps to a contiguous frame range `{ first, last, fps }`.
-- A `CharacterState` tracks the current state; on `StateChanged` the controller switches to the
-  mapped frame range (single sheet, contiguous cells per state).
-- Draw the current cell via `sheet.SubImage(frameRect)`; advance the frame index by **accumulated
-  elapsed time** (not raw tick count) so the manifest's fps is accurate regardless of `SetTPS`.
-  Loop within `first..=last`.
+- Load each rig part from the manifest as an `ebiten.Image`; compose parts each draw in manifest
+  order/offsets (e.g. body → head → eye/eyelid → hands → mouth).
+- A `CharacterState` tracks the current activity state; on `StateChanged` the controller switches
+  which part variant to show (e.g. typing → `left`/`right` up frames; talking → `mouth` frames
+  toggled by loudness; blink → `eyelid`).
+- Part variants animate by **accumulated elapsed time** (not raw tick count) so the manifest's fps
+  is accurate regardless of `SetTPS`.
 - Cursor tracking: use `ebiten.CursorPosition()` to offset/angle the character toward the mouse
   (resolves the original "presence-only vs track cursor" question → track cursor).
 - Rotation/blend between states is out of scope; switches are discrete for now (can soften later).
+- A debug overlay (part name + bounds) is planned to hand-tune `character.offsets` until a
+  representative skin is installed.
 
 ### 5.6 Config / manifest (`config.go` + TOML)
 
-Assets arrive later, so the mapping is **data-driven**. TOML (replaces RON):
+Assets arrive later, so the mapping is **data-driven**. TOML (replaces RON). The real BitBuddy
+assets are **rig parts** (separate composited PNGs), not sprite sheets, so the schema describes
+parts and their composition offsets:
 
 ```toml
 [character]
-spritesheet = "character/spritesheet.png"
-frame_size  = { width = 192, height = 192 }
+skin = "alien_cat"
 
-[character.states]
-idle    = { first = 0,  last = 11, fps = 8  }
-typing  = { first = 12, last = 23, fps = 12 }
-mouse   = { first = 24, last = 35, fps = 12 }
-gaming  = { first = 36, last = 47, fps = 15 }
-talking = { first = 48, last = 59, fps = 12 }
-sleep   = { first = 60, last = 71, fps = 6  }
+[character.parts]
+body   = "alien_cat_body.png"
+head   = "alien_cat_head.png"
+eye    = "alien_cat_eye.png"
+eyelid = "alien_cat_eyelid.png"
+left   = ["alien_cat_left_up.png", "alien_cat_left_down.png"]
+right  = ["alien_cat_right_up.png", "alien_cat_right_down.png"]
+mouse  = ["alien_cat_mouse_up.png", "alien_cat_mouse_down.png"]
+mouth  = ["mouth_1036_1.png", "mouth_1036_2.png", "mouth_1036_3.png"]
+
+[character.offsets]   # hand-tuned; no scene metadata in extracted assets
+body   = { x = 0,  y = 0 }
+head   = { x = 16, y = 8 }
+eye    = { x = 0,  y = 0 }
+...
 
 [activity]
 idle_after_secs = 5.0
@@ -220,8 +237,25 @@ sleep_after_secs = 120.0
 mic_threshold = 0.08
 ```
 
-Until a real sheet exists, ship a tiny placeholder (procedural frames or a single colored sprite)
-so the whole pipeline is testable end-to-end in OBS.
+Notes on the rig schema:
+- Part lists encode **state variants** (e.g. `left = [up, down]` → typing toggles the hand; `mouth`
+  frames → talking). The exact state→part mapping is finalized in the animation milestone (M5).
+- Names vary per skin (`left_hand_up` vs `left_up`, optional `_no_mouth`/`_eye`); the manifest
+  simply points at whatever files exist for the chosen skin.
+- Until real assets exist, ship a tiny placeholder so the pipeline is testable in OBS.
+
+### 5.7 Asset directory resolution (`assets.go`)
+
+The app reads assets from a **user data directory**, not from the repo (BitBuddy assets are
+copyrighted and must not be distributed):
+
+- Resolve order: `PNGTUBER_ASSETS` env var → `--assets` flag → `$XDG_DATA_HOME/pngtuber/assets`
+  (Linux default `~/.local/share/pngtuber/assets`).
+- `manifest.toml` and all part images are loaded relative to that directory.
+- If the dir has no manifest, fall back to the committed placeholder (`assets/character/`) and log
+  which dir was used, so `go run .` works out of the box.
+- `docs/bitbuddy-assets.md` documents extracting assets from a purchased BitBuddy copy and copying
+  a skin into the data dir; users may supply their own rig parts instead.
 
 ---
 
@@ -233,14 +267,17 @@ so the whole pipeline is testable end-to-end in OBS.
 | 2 | Global input pipeline | evdev goroutine → `ActivitySignals`; activity logged to console | Keystrokes/mouse motion while another app is focused flip counters; no crash without `/dev/input` perms | ☐ |
 | 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ☐ |
 | 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ☐ |
-| 5 | Character animation | Sprite draw, state→frame controller, placeholder sheet, cursor tracking | Character switches animation per state, loops correctly, tracks cursor | ☐ |
-| 6 | Config manifest | TOML-driven states/thresholds + placeholder assets | Editing `manifest.toml` changes behavior without recompiling | ☐ |
-| 7 | Asset integration | Real sprite sheet wired in (when provided) | States map to real frames, tuned fps/priorities | ☐ |
+| 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ☐ |
+| 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ☐ |
+| 7 | Asset data dir + first skin | `assets.go` resolution, `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS | ☐ |
+| 8 | Asset integration (more skins) | Real rigs wired in for other skins as desired | Skin selection + per-skin parts/offsets work without code changes | ☐ |
 
 ### Suggested order rationale
 Milestone 1 retires the single biggest technical risk (transparent capture) immediately.
 Milestones 2–4 build the state machine with console/log feedback before any visual polish.
-Milestone 5 adds the visuals on top of a working state machine. 6–7 make the whole thing asset-ready.
+Milestone 5 adds the visuals on top of a working state machine. 6–7 make the whole thing asset-ready
+(7 pulls a real copyrighted skin in locally without committing it). 8 generalizes to user-provided
+skins.
 
 ---
 
@@ -269,6 +306,7 @@ Milestone 5 adds the visuals on top of a working state machine. 6–7 make the w
 | Real assets unknown format | Low | Data-driven manifest + `frame_size` config; assume standard sprite-sheet grid |
 | Transparent window needs compositor (X11) | Low | Document compositor requirement in README (same caveat as Bevy) |
 | cgo/GLFW build needs X11+OpenGL dev headers | Low | `shell.nix` on NixOS; documented `libx11-dev`/`libgl-dev` for other distros |
+| BitBuddy assets are copyrighted (can't ship/commit) | Medium | Assets load from a user data dir (`~/.local/share/pngtuber/assets/`); repo ships docs + placeholder only |
 
 ---
 
@@ -283,7 +321,8 @@ Milestone 5 adds the visuals on top of a working state machine. 6–7 make the w
   switch frames? Default: switch frames only (window must remain capturable).
 
 > Resolved in this revision: config format → **TOML**; mouse detail → **track cursor position**;
-> mic → **jfreymuth/pulse (pure Go)**; engine → **Ebitengine v2.9**.
+> mic → **jfreymuth/pulse (pure Go)**; engine → **Ebitengine v2.9**; animation assets → **rig parts
+> (composited PNGs), not sprite sheets**; BitBuddy assets → **user data dir, not committed**.
 
 ---
 
@@ -307,3 +346,9 @@ needs X11/OpenGL dev headers to build and GL libs on the runtime loader path. Th
 "pure Go, no cgo" assumption was corrected in §2/§3 and handled via `shell.nix`.
 
 Next slice: **Milestone 2** — evdev goroutine → `ActivitySignals`, logged to console.
+
+**Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
+eye, eyelid, hands, mouth shapes) with no scene metadata in the extracted pack, so part offsets must
+be hand-tuned via the manifest. Assets are copyrighted (Saltfish) and load from a user data dir
+(`~/.local/share/pngtuber/assets/`); the repo ships only docs + a placeholder. See §5.6–5.7 and
+`docs/bitbuddy-assets.md`.
