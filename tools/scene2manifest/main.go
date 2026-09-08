@@ -288,14 +288,20 @@ func buildManifest(nodes []node, skin string) string {
 	fmt.Fprintf(&b, "mouth = { part = \"mouth\", fps = 10.0 }\n")
 	fmt.Fprintf(&b, "press = { parts = [\"left\", \"right\"], duration_secs = 0.1, variant = 1 }\n")
 	fmt.Fprintf(&b, "breathing = { parts = [\"body\", \"head\"], period_secs = 4.0, amplitude = 0.015 }\n")
-	fmt.Fprintf(&b, "hand_move_delay_secs = 1.0\n")
+	fmt.Fprintf(&b, "hand_move_delay_secs = 0.5\n")
 	if hasEyelid {
 		fmt.Fprintf(&b, "blink = { part = \"eyelid\", closed_variant = 1, interval_secs = 3.0, duration_secs = 0.15 }\n")
 	} else {
 		fmt.Fprintf(&b, "blink = { part = \"\", closed_variant = 0, interval_secs = 0, duration_secs = 0 }\n")
 	}
 
-	fmt.Fprintf(&b, "\n[character.tracking]\nparts = [\"mouse\", \"mouse_dev\"]\nmax_x = 20\nmax_y = 12\nsensitivity = 0.02\n")
+	fmt.Fprintf(&b, "\n[character.tracking]\n")
+	if parts["mouse"] != nil {
+		fmt.Fprintf(&b, "parts = [\"mouse\", \"mouse_dev\"]\nstretch = [\"mouse\"]\n")
+	} else {
+		fmt.Fprintf(&b, "parts = [\"mouse_dev\"]\nstretch = []\n")
+	}
+	fmt.Fprintf(&b, "max_x = 20\nmax_y = 12\nsensitivity = 0.02\n")
 	fmt.Fprintf(&b, "\n[character.look]\nparts = []\nmax_x = 10\nmax_y = 10\n")
 	fmt.Fprintf(&b, "\n[activity]\nidle_after_secs = 5.0\nsleep_after_secs = 120.0\nmic_threshold = 0.08\nmic_hysteresis = 0.5\ngaming_window_secs = 1.0\n")
 	return b.String()

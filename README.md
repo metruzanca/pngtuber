@@ -25,7 +25,9 @@ unit. All of a part's variants shift together. The head/eyes do not track the cu
 The mouse hand and left keyboard hand are the same physical hand: only the actively-used one shows
 (`[character.visibility]`), the mouse device stays visible at all times, and both poses are visible
 in edit mode. The mouse hand follows the **real mouse** via the global input backend's relative
-motion (see `[character.tracking] sensitivity`), so it moves even while the window is unfocused.
+motion (see `[character.tracking] sensitivity`) — instead of sliding, it **stretches toward the
+mouse** from its fixed top row (`[character.tracking] stretch`), so it moves even while the window
+is unfocused.
 
 ## Building
 

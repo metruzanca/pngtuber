@@ -245,6 +245,25 @@ func clampF(v, lo, hi float64) float64 {
 	return v
 }
 
+// stretchGeoM builds the transform that keeps a part's top row fixed and
+// stretches it so its bottom edge reaches (dx, dy) from the base — a
+// perspective-style reach toward the mouse: horizontal shear sx = dx/h plus a
+// vertical scale sy = 1 + dy/h, composed about the part's top-center.
+func stretchGeoM(off Offset, w, h int, dx, dy float64) ebiten.GeoM {
+	ax := float64(off.X) + float64(w)/2
+	ay := float64(off.Y)
+	sy := 1 + dy/float64(h)
+	if sy < 0.05 {
+		sy = 0.05
+	}
+	var m ebiten.GeoM
+	m.Translate(-ax, -ay)
+	m.Skew(dx/float64(h), 0)
+	m.Scale(1, sy)
+	m.Translate(ax, ay)
+	return m
+}
+
 // Press records key events: each one taps the next press part (alternating)
 // down for press.duration_secs.
 func (c *Character) Press(keys int) {
@@ -439,6 +458,10 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 	for _, p := range c.tracking.Parts {
 		track[p] = true
 	}
+	stretch := map[string]bool{}
+	for _, p := range c.tracking.Stretch {
+		stretch[p] = true
+	}
 	look := map[string]bool{}
 	for _, p := range c.look.Parts {
 		look[p] = true
@@ -482,10 +505,16 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 			lx, ly = lookX, lookY
 		}
 		tx, ty := 0.0, 0.0
-		if track[part] && mouseActive && !c.steady {
+		switch {
+		case track[part] && mouseActive && !c.steady && stretch[part]:
+			// The hand keeps its top row fixed and stretches toward the mouse.
+			op.GeoM.Concat(stretchGeoM(off, w, h, c.mouseOffX, c.mouseOffY))
+		case track[part] && mouseActive && !c.steady:
 			tx, ty = c.mouseOffX, c.mouseOffY
+			op.GeoM.Translate(float64(off.X)+lx+tx, float64(off.Y)+ly+ty)
+		default:
+			op.GeoM.Translate(float64(off.X)+lx, float64(off.Y)+ly)
 		}
-		op.GeoM.Translate(float64(off.X)+lx+tx, float64(off.Y)+ly+ty)
 		screen.DrawImage(imgs[idx], op)
 	}
 }

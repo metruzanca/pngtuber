@@ -58,12 +58,15 @@ mouth = { part = "mouth", fps = 10.0 }                      # talk frames cycle 
 press = { parts = ["left", "right"], duration_secs = 0.1, variant = 1 } # hands tap down per keystroke
 blink = { part = "eyelid", closed_variant = 1, interval_secs = 3.0, duration_secs = 0.15 }
 breathing = { parts = ["body", "head"], period_secs = 4.0, amplitude = 0.015 }
-hand_move_delay_secs = 1.0                                  # debounce hand-layout changes
+hand_move_delay_secs = 0.5                                  # debounce hand-layout changes
 
 # Parts that follow the real mouse while it's active (hand + mouse device).
 # Motion comes from global input, so it works even when the window is unfocused.
+# The hand (stretch) keeps its top row fixed and stretches toward the mouse;
+# the mouse device translates with the cursor.
 [character.tracking]
 parts = ["mouse", "mouse_dev"]
+stretch = ["mouse"]
 max_x = 20
 max_y = 12
 sensitivity = 0.02

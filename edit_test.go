@@ -210,6 +210,35 @@ func TestPartGroup(t *testing.T) {
 	}
 }
 
+// TestStretchGeoM verifies the hand stretch: the top row stays fixed and the
+// bottom edge reaches the tracked mouse offset.
+func TestStretchGeoM(t *testing.T) {
+	const w, h = 40, 50
+	off := Offset{X: 10, Y: 20}
+	dx, dy := 8.0, -6.0
+
+	closeEnough := func(name string, got, want, tol float64) {
+		if got < want-tol || got > want+tol {
+			t.Errorf("%s = %v, want ~%v", name, got, want)
+		}
+	}
+
+	m := stretchGeoM(off, w, h, dx, dy)
+	// Top-center is pinned.
+	tx, ty := m.Apply(float64(off.X+w/2), float64(off.Y))
+	closeEnough("top-center x", tx, float64(off.X+w/2), 0.1)
+	closeEnough("top-center y", ty, float64(off.Y), 0.1)
+	// Bottom-center reaches (dx, dy) from the base.
+	bx, by := m.Apply(float64(off.X+w/2), float64(off.Y+h))
+	closeEnough("bottom-center x", bx, float64(off.X+w/2)+dx, 0.1)
+	closeEnough("bottom-center y", by, float64(off.Y+h)+dy, 0.1)
+	// Zero offset is identity.
+	m0 := stretchGeoM(off, w, h, 0, 0)
+	x, y := m0.Apply(float64(off.X), float64(off.Y))
+	closeEnough("zero-stretch x", x, float64(off.X), 0.001)
+	closeEnough("zero-stretch y", y, float64(off.Y), 0.001)
+}
+
 func TestLookPartsConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "manifest.toml")
 	if err := os.WriteFile(path, []byte("[character.look]\nparts = [\"head\"]\nmax_x = 10\nmax_y = 10\n"), 0o644); err != nil {

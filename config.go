@@ -60,9 +60,12 @@ type LookConfig struct {
 // TrackingConfig makes parts follow the real mouse while the mouse is active,
 // clamped to max px per axis. Motion comes from the global input backend's
 // relative deltas (works with the window unfocused), scaled by Sensitivity
-// (px of drift per real mouse unit).
+// (px of drift per real mouse unit). Parts listed in Stretch keep their base
+// (top row) fixed and stretch toward the mouse instead of translating; the
+// other parts (e.g. the mouse device) translate with the cursor.
 type TrackingConfig struct {
 	Parts       []string `toml:"parts"`
+	Stretch     []string `toml:"stretch"`
 	MaxX        float64  `toml:"max_x"`
 	MaxY        float64  `toml:"max_y"`
 	Sensitivity float64  `toml:"sensitivity"`

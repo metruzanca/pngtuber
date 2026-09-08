@@ -505,6 +505,14 @@ edit mode; the mouse device and right hand stay visible always. Tool emits both 
 placeholder regenerated; unit tests (`partVisible` per state incl. edit mode, group drag) and
 headless composite checks (left/mouse hand anchors differ between typing and mouse) verify.
 
+**Hand stretch + faster hand switch:** the mouse hand no longer translates with the cursor — it
+**stretches toward the mouse** instead: `[character.tracking] stretch = ["mouse"]` keeps the hand's
+**top row fixed** (the base/wrist, due to perspective) and stretches it (horizontal skew + vertical
+scale about the top-center) so the **bottom edge reaches the tracked offset** (`stretchGeoM`, unit
+tested via `GeoM.Apply`). The mouse device still translates with the real cursor. The hand-layout
+debounce was **halved** (`hand_move_delay_secs` 1.0 → 0.5) so the hands relocate to/from the
+keyboard in half the time. Tool emits both; skins + placeholder regenerated.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the
