@@ -157,8 +157,10 @@ type Character struct {
 	mouthOn bool
 
 	// mouse hand tracking (driven by global relative motion, focus-independent)
-	mouseOffX float64
-	mouseOffY float64
+	mouseOffX   float64
+	mouseOffY   float64
+	mouseActive bool
+	mouseIdle   float64
 }
 
 // NewCharacter creates a Character in the Idle state, driven by the manifest's
@@ -211,14 +213,32 @@ func (c *Character) SetSteady(steady bool) {
 }
 
 // UpdateMouse integrates global relative mouse motion into the tracked parts'
-// offset (the hand on the mouse) while the committed state has the mouse
-// active; otherwise the offset springs back to rest. dx/dy are the relative
-// motion accumulated this tick by the input backend.
+// offset while the mouse is active, otherwise the offset springs back to rest.
+//
+// The mouse hand turns ON instantly with any mouse motion (or a Mouse/Gaming
+// state) and turns OFF only after hand_move_delay_secs of none — so it appears
+// the moment the real mouse moves (even mid-typing) instead of waiting for the
+// debounced committed layout, while still avoiding flicker during brief gaming
+// pauses.
 func (c *Character) UpdateMouse(dx, dy int, dt float64) {
+	if dx != 0 || dy != 0 || c.raw == Mouse || c.raw == Gaming {
+		c.mouseIdle = 0
+		c.mouseActive = true
+	} else {
+		c.mouseIdle += dt
+		delay := c.anim.HandMoveDelaySecs
+		if delay <= 0 {
+			delay = 0.5
+		}
+		if c.mouseIdle >= delay {
+			c.mouseActive = false
+		}
+	}
+
 	if len(c.tracking.Parts) == 0 {
 		return
 	}
-	if c.hands == Mouse || c.hands == Gaming {
+	if c.mouseActive {
 		c.mouseOffX += float64(dx) * c.tracking.Sensitivity
 		c.mouseOffY += float64(dy) * c.tracking.Sensitivity
 		c.mouseOffX = clampF(c.mouseOffX, -c.tracking.MaxX, c.tracking.MaxX)
@@ -435,20 +455,19 @@ func (c *Character) PartGroup(part string) []string {
 // partVisible reports whether a part should be drawn. In edit mode everything
 // is visible so both hand poses can be positioned; otherwise the mouse hand
 // and the keyboard hand (the same physical hand) are mutually exclusive based
-// on the debounced committed state.
+// on the tracked mouse activity (instant-on, delayed-off).
 func (c *Character) partVisible(part string) bool {
 	if c.steady {
 		return true
 	}
-	mouseActive := c.hands == Mouse || c.hands == Gaming
 	for _, p := range c.visibility.MouseHand {
 		if p == part {
-			return mouseActive
+			return c.mouseActive
 		}
 	}
 	for _, p := range c.visibility.KeyboardHand {
 		if p == part {
-			return !mouseActive
+			return !c.mouseActive
 		}
 	}
 	return true
@@ -483,7 +502,6 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 	for _, p := range c.look.Parts {
 		look[p] = true
 	}
-	mouseActive := c.hands == Mouse || c.hands == Gaming
 
 	for _, part := range c.rig.order {
 		if !c.partVisible(part) {
@@ -523,10 +541,10 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 		}
 		tx, ty := 0.0, 0.0
 		switch {
-		case track[part] && mouseActive && !c.steady && stretch[part]:
+		case track[part] && c.mouseActive && !c.steady && stretch[part]:
 			// The hand keeps its top row fixed and stretches toward the mouse.
 			op.GeoM.Concat(stretchGeoM(off, w, h, c.mouseOffX, c.mouseOffY))
-		case track[part] && mouseActive && !c.steady:
+		case track[part] && c.mouseActive && !c.steady:
 			tx, ty = c.mouseOffX, c.mouseOffY
 			op.GeoM.Translate(float64(off.X)+lx+tx, float64(off.Y)+ly+ty)
 		default:

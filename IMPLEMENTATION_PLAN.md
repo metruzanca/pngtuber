@@ -534,6 +534,13 @@ instant it drops below — no hysteresis or state-machine hold for the mouth.
 desk covers the body's bottom cut-off, with the keyboard/mouse and hands layered on top of it. Tool
 emission + placeholder + skins updated.
 
+**Instant mouse hand:** the mouse-hand/keyboard-hand visibility no longer keys off the debounced
+committed hand state (which can never reach Gaming during typing with brief mouse moves, so the mouse
+hand never appeared). A tracked `mouseActive` flag turns **on instantly** with any mouse motion or a
+Mouse/Gaming state and turns **off only after** `hand_move_delay_secs` of none — so the hand jumps to
+the mouse the moment the real mouse moves, and both hands return to the keyboard only once the mouse
+is idle.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

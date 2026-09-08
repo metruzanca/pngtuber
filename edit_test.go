@@ -154,7 +154,7 @@ func TestPressAlternatesHands(t *testing.T) {
 func TestPartVisible(t *testing.T) {
 	c := testCharacter()
 	mouseOn := func() {
-		c.hands = Mouse
+		c.mouseActive = true
 		if !c.partVisible("mouse") || c.partVisible("left") {
 			t.Errorf("mouse active: mouse visible=%v left visible=%v, want true/false", c.partVisible("mouse"), c.partVisible("left"))
 		}
@@ -163,24 +163,19 @@ func TestPartVisible(t *testing.T) {
 		}
 	}
 	mouseOff := func() {
-		c.hands = Typing
+		c.mouseActive = false
 		if c.partVisible("mouse") || !c.partVisible("left") {
-			t.Errorf("typing: mouse visible=%v left visible=%v, want false/true", c.partVisible("mouse"), c.partVisible("left"))
+			t.Errorf("no mouse: mouse visible=%v left visible=%v, want false/true", c.partVisible("mouse"), c.partVisible("left"))
 		}
 		if !c.partVisible("mouse_dev") || !c.partVisible("right") {
-			t.Error("mouse device / right hand must stay visible while typing")
+			t.Error("mouse device / right hand must stay visible while idle")
 		}
 	}
 	mouseOn()
 	mouseOff()
-	// Gaming also counts as mouse-active.
-	c.hands = Gaming
-	if !c.partVisible("mouse") || c.partVisible("left") {
-		t.Error("gaming: mouse hand should show, left keyboard hand hidden")
-	}
 	// Edit mode (steady): both hands visible.
 	c.SetSteady(true)
-	c.hands = Typing
+	c.mouseActive = false
 	if !c.partVisible("mouse") || !c.partVisible("left") {
 		t.Error("edit mode should show both hand poses")
 	}
@@ -297,6 +292,40 @@ func TestMouseTrackingSteadyResets(t *testing.T) {
 	c.SetSteady(true)
 	if c.mouseOffX != 0 || c.mouseOffY != 0 {
 		t.Fatalf("steady should reset mouseOff, got %v,%v", c.mouseOffX, c.mouseOffY)
+	}
+}
+
+// TestMouseActiveInstantOnDelayedOff verifies the mouse hand appears instantly
+// on mouse motion (even mid-typing) and only releases after the debounce, so
+// it doesn't flicker during brief pauses.
+func TestMouseActiveInstantOnDelayedOff(t *testing.T) {
+	c := testCharacter()
+	c.UpdateMouse(0, 0, 0.016)
+	if c.mouseActive {
+		t.Fatal("should start inactive with no motion")
+	}
+	// Motion activates instantly.
+	c.UpdateMouse(5, 3, 0.016)
+	if !c.mouseActive {
+		t.Fatal("mouse motion should activate the hand instantly")
+	}
+	// A brief pause keeps it on (delayed release).
+	c.UpdateMouse(0, 0, 0.016)
+	if !c.mouseActive {
+		t.Fatal("mouse hand should stay during a brief pause")
+	}
+	// Past the release delay it turns off.
+	for i := 0; i < 20; i++ {
+		c.UpdateMouse(0, 0, 0.1)
+	}
+	if c.mouseActive {
+		t.Fatal("mouse hand should turn off after the release delay")
+	}
+	// A Mouse/Gaming raw state also activates it instantly.
+	c.raw = Gaming
+	c.UpdateMouse(0, 0, 0.016)
+	if !c.mouseActive {
+		t.Fatal("Gaming state should activate the mouse hand instantly")
 	}
 }
 
