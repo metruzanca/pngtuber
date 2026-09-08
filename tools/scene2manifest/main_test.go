@@ -19,12 +19,12 @@ func TestMapNode(t *testing.T) {
 		"Eyelid":           {"eyelid", 0},
 		"Mouth1":           {"mouth", 0},
 		"Mouth3":           {"mouth", 2},
-		"LeftHandUp":       {"left", 0},
-		"LeftHandDown":     {"left", 1},
-		"RightHandUp":      {"right", 0},
-		"RightHandDown":    {"right", 1},
-		"MouseHandUp":      {"mouse", 0},
-		"MouseHandDown":    {"mouse", 1},
+		"LeftHandUp":       {"left", 1},
+		"LeftHandDown":     {"left", 0},
+		"RightHandUp":      {"right", 1},
+		"RightHandDown":    {"right", 0},
+		"MouseHandUp":      {"mouse", 1},
+		"MouseHandDown":    {"mouse", 0},
 		"Desk":             {"", 0},
 		"AnimatedSprite2D": {"", 0},
 	}
@@ -75,16 +75,17 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 		`hand_move_delay_secs = 1.0`,
 		`breathing = { parts = ["body", "head"]`,
 		`press = { parts = ["left", "right"], duration_secs = 0.1, variant = 1 }`,
-		`mouse  = { mouse = 1, gaming = 1 }`,
 		"[character.look]\nparts = []",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
 	}
-	// left/right are not statically "down" while typing; presses drive them.
-	if strings.Contains(out, "left   = { typing") || strings.Contains(out, "right  = { typing") {
-		t.Errorf("left/right should not have a static typing mapping:\n%s", out)
+	// Hands rest down (variant 0) by default; no static left/right/mouse state
+	// mapping — presses (up) drive the arms.
+	if strings.Contains(out, "left   = { typing") || strings.Contains(out, "right  = { typing") ||
+		strings.Contains(out, "mouse  = { mouse") {
+		t.Errorf("no static hand state mapping expected:\n%s", out)
 	}
 }
 
@@ -92,8 +93,8 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 // normalized so the rig starts at (0,0), independent of code.
 func TestBuildManifestNormalizesOffsets(t *testing.T) {
 	nodes := []node{
-		// LeftHandUp center (100,50), size 20x20 -> top-left (90,40).
-		{Name: "LeftHandUp", Type: "Sprite2D", Pos: []float64{100, 50}, ZIndex: 6, Texture: "res://l.png", TexSize: []int{20, 20}},
+		// LeftHandDown center (100,50), size 20x20 -> top-left (90,40).
+		{Name: "LeftHandDown", Type: "Sprite2D", Pos: []float64{100, 50}, ZIndex: 6, Texture: "res://l.png", TexSize: []int{20, 20}},
 		// Body center (150,120), size 40x40 -> top-left (130,100).
 		{Name: "Body", Type: "Sprite2D", Pos: []float64{150, 120}, ZIndex: 0, Texture: "res://b.png", TexSize: []int{40, 40}},
 	}

@@ -58,7 +58,10 @@ var deskLayout = []struct {
 }
 
 // mapNode maps a scene node name to a rig part + variant index (0-based, in
-// the order the variants will appear in the manifest).
+// the order the variants will appear in the manifest). Variant 0 is the
+// default/resting variant: for the arms the resting pose is the "_down" sprite
+// (hands resting on the desk/keyboard), so "_down" maps to variant 0 and the
+// "_up" sprite to variant 1 (used by the press animation while typing).
 func mapNode(name string) (part string, ord int, ok bool) {
 	switch {
 	case name == "Body", name == "BodyNoMouth":
@@ -78,17 +81,17 @@ func mapNode(name string) (part string, ord int, ok bool) {
 		}
 		return "mouth", n - 1, true
 	case name == "LeftHandUp":
-		return "left", 0, true
-	case name == "LeftHandDown":
 		return "left", 1, true
+	case name == "LeftHandDown":
+		return "left", 0, true
 	case name == "RightHandUp":
-		return "right", 0, true
-	case name == "RightHandDown":
 		return "right", 1, true
+	case name == "RightHandDown":
+		return "right", 0, true
 	case name == "MouseHandUp":
-		return "mouse", 0, true
-	case name == "MouseHandDown":
 		return "mouse", 1, true
+	case name == "MouseHandDown":
+		return "mouse", 0, true
 	}
 	return "", 0, false
 }
@@ -263,7 +266,6 @@ func buildManifest(nodes []node, skin string) string {
 
 	hasEyelid := parts["eyelid"] != nil
 	fmt.Fprintf(&b, "\n[character.variants]\n")
-	fmt.Fprintf(&b, "mouse  = { mouse = 1, gaming = 1 }\n")
 	if hasEyelid {
 		fmt.Fprintf(&b, "eyelid = { sleep = 1 }\n")
 	}

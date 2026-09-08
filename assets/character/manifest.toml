@@ -14,12 +14,13 @@ eye       = ["eye.png"]
 eyelid    = ["eyelid_open.png", "eyelid_closed.png"]
 keyboard  = ["keyboard.png"]
 mouse_dev = ["mouse_dev.png"]
-left      = ["left_up.png", "left_down.png"]
-right     = ["right_up.png", "right_down.png"]
-mouse     = ["mouse_up.png", "mouse_down.png"]
+left      = ["left_down.png", "left_up.png"]
+right     = ["right_down.png", "right_up.png"]
+mouse     = ["mouse_down.png", "mouse_up.png"]
 mouth     = ["mouth_1.png", "mouth_2.png", "mouth_3.png"]
 
 # Per-variant offsets: one {x,y} per part variant, in the same order as parts.
+# Variant 0 is the default/resting pose — for the arms that's the _down sprite.
 [character.offsets]
 desk      = [{ x = 0,  y = 148 }]
 body      = [{ x = 48,  y = 100 }]
@@ -28,18 +29,16 @@ eye       = [{ x = 84,  y = 76 }]
 eyelid    = [{ x = 84,  y = 76 }, { x = 84, y = 76 }]
 keyboard  = [{ x = 85,  y = 78 }]
 mouse_dev = [{ x = 126, y = 68 }]
-left      = [{ x = 52,  y = 96 }, { x = 52, y = 110 }]
-right     = [{ x = 112, y = 96 }, { x = 112, y = 110 }]
-mouse     = [{ x = 137, y = 94 }, { x = 137, y = 106 }]
+left      = [{ x = 52,  y = 110 }, { x = 52, y = 96 }]
+right     = [{ x = 112, y = 110 }, { x = 112, y = 96 }]
+mouse     = [{ x = 137, y = 106 }, { x = 137, y = 94 }]
 mouth     = [{ x = 84,  y = 100 }, { x = 84, y = 100 }, { x = 84, y = 100 }]
 
 # Per-state variant mapping: part -> state -> variant index. States use the
 # activity names (idle, mouse, typing, gaming, talking, sleep); parts use 0
-# (default/calm variant) for any state not listed. The mouse hand holds the
-# mouse during mouse/gaming; the keyboard hands tap up/down per keystroke via
-# the press animation below.
+# (default/calm variant) for any state not listed. Arms rest down by default
+# (variant 0); the press animation lifts them per keystroke.
 [character.variants]
-mouse  = { mouse = 1, gaming = 1 }
 eyelid = { sleep = 1 }
 
 # Dynamic part behaviors. Either can be disabled by leaving part empty.

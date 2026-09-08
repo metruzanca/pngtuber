@@ -488,6 +488,13 @@ added to `TrackingConfig` and emitted by the tool. Verified: input delta accumul
 REL mapping, `UpdateMouse` integrate/clamp/decay/steady-reset, exit-save persistence tests; live run
 confirmed global mouse motion flows while the window stayed unfocused.
 
+**Arm inversion:** the arms and mouse hand were **inverted** so the **default/resting pose is
+"down"** — variant 0 is now the `_down` sprite (hands resting on the desk/keyboard/mouse) and the
+`_up` sprite is variant 1, used by the press animation to lift a hand per keystroke while typing.
+`tools/scene2manifest` now maps `*HandUp` → ord 1 and `*HandDown` → ord 0 (offsets follow the scene
+positions), and the static hand-state variant mapping was dropped (hands rest down in every state).
+Skins + placeholder regenerated; tests updated (resting-down hand expectations, tool ord mapping).
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

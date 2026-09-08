@@ -11,9 +11,6 @@ import (
 func testConfig() CharacterConfig {
 	return CharacterConfig{
 		Variants: map[string]map[string]int{
-			"left":   {"typing": 1, "gaming": 1},
-			"right":  {"typing": 1, "gaming": 1},
-			"mouse":  {"mouse": 1, "gaming": 1},
 			"eyelid": {"sleep": 1},
 		},
 		Animations: AnimationsConfig{
@@ -70,6 +67,8 @@ func TestFrameLoopResetAndSingle(t *testing.T) {
 	}
 }
 
+// TestVariantSelectionHands verifies the arms rest DOWN (variant 0) in every
+// state by default — the press animation (tested separately) lifts them.
 func TestVariantSelectionHands(t *testing.T) {
 	c := testCharacter()
 	cases := []struct {
@@ -79,9 +78,9 @@ func TestVariantSelectionHands(t *testing.T) {
 		mouse int
 	}{
 		{Idle, 0, 0, 0},
-		{Typing, 1, 1, 0},
-		{Mouse, 0, 0, 1},
-		{Gaming, 1, 1, 1},
+		{Typing, 0, 0, 0},
+		{Mouse, 0, 0, 0},
+		{Gaming, 0, 0, 0},
 		{Talking, 0, 0, 0},
 		{Sleep, 0, 0, 0},
 	}
