@@ -40,7 +40,7 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 - [x] Milestone 5: Character animation
 - [x] Milestone 6: Config manifest
 - [x] Milestone 7: Asset data dir + first skin
-- [ ] Milestone 8: Asset integration (more skins)
+- [x] Milestone 8: Asset integration (more skins)
 
 ### Non-Goals (current phase)
 - Click-through window or always-on-top behavior (OBS positions the element).
@@ -291,7 +291,7 @@ from the scene**, not guessed.
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ✅ |
 | 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ✅ |
 | 7 | Asset data dir + first skin | `assets.go` resolution, scene→manifest tool (§5.8), `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS with offsets derived from `coworker_1036.scn` | ✅ |
-| 8 | Asset integration (more skins) | Real rigs wired in for other skins as desired | Skin selection + per-skin parts/offsets work without code changes | ☐ |
+| 8 | Asset integration (more skins) | Real rigs wired in for other skins as desired | Skin selection + per-skin parts/offsets work without code changes | ✅ |
 
 ### Suggested order rationale
 Milestone 1 retires the single biggest technical risk (transparent capture) immediately.
@@ -438,6 +438,16 @@ user data dir (…/skins/alien_cat/manifest.toml)`), the window auto-sizes to 15
 composite check confirmed opaque body/head at the scene-derived offsets. The placeholder still
 works out of the box with a logged fallback. Copyrighted art stays out of the repo — only tooling +
 docs are committed.
+
+**Milestone 8 (done):** skin selection + per-skin parts/offsets work without code changes. A second
+skin (**frog**, `coworker_1002.scn`) was run through the same pipeline and exposed one real naming
+variation: it ships both `Body` (baked-in mouth) and `BodyNoMouth`, so `tools/scene2manifest` now
+prefers `BodyNoMouth` when present (pngtuber draws the mouth as a separate part). The tool was
+refactored into `buildManifest` and gained unit tests (node-name mapping incl. variations,
+BodyNoMouth preference, offset normalization, z-order, blink/mouth animation emission). Both skins
+install under `~/.local/share/pngtuber/assets/skins/` and load via `--skin`/`PNGTUBER_SKIN` with
+no code changes: alien_cat → 154×149, frog → 165×128 (auto-sized windows). Full suite + vet +
+build + gofmt clean. **All 8 milestones complete.**
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
