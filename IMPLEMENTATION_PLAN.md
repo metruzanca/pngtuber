@@ -105,6 +105,9 @@ needed for mic (Milestone 3+). No `libasound2-dev`/`alsa-lib-devel` required.
 ├── mic.go                # jfreymuth/pulse record stream -> smoothed loudness
 ├── character.go          # rig composition, state->part controller, cursor visuals
 ├── window.go             # (optional) transparent window / RunGameOptions helper
+├── tools/
+│   └── scene2manifest/   # §5.8: extract coworker_*.scn + .import from BitBuddy.pck,
+│                         #   parse scene -> generate manifest.toml parts/offsets
 ├── docs/
 │   └── bitbuddy-assets.md # extracting BitBuddy assets (copyrighted, not distributed)
 └── README.md             # /dev/input perms, PulseAudio, OBS capture, asset install
@@ -202,8 +205,7 @@ const (
 - Cursor tracking: use `ebiten.CursorPosition()` to offset/angle the character toward the mouse
   (resolves the original "presence-only vs track cursor" question → track cursor).
 - Rotation/blend between states is out of scope; switches are discrete for now (can soften later).
-- A debug overlay (part name + bounds) is planned to hand-tune `character.offsets` until a
-  representative skin is installed.
+- Part offsets/z-order are **auto-derived from the skin's Godot scene** (see §5.8), not hand-tuned.
 
 ### 5.6 Config / manifest (`config.go` + TOML)
 
@@ -225,7 +227,7 @@ right  = ["alien_cat_right_up.png", "alien_cat_right_down.png"]
 mouse  = ["alien_cat_mouse_up.png", "alien_cat_mouse_down.png"]
 mouth  = ["mouth_1036_1.png", "mouth_1036_2.png", "mouth_1036_3.png"]
 
-[character.offsets]   # hand-tuned; no scene metadata in extracted assets
+[character.offsets]   # auto-derived from the skin's Godot scene (see §5.8)
 body   = { x = 0,  y = 0 }
 head   = { x = 16, y = 8 }
 eye    = { x = 0,  y = 0 }
@@ -257,6 +259,25 @@ copyrighted and must not be distributed):
 - `docs/bitbuddy-assets.md` documents extracting assets from a purchased BitBuddy copy and copying
   a skin into the data dir; users may supply their own rig parts instead.
 
+### 5.8 Scene → manifest tooling (auto offsets)
+
+The BitBuddy `.pck` (Godot 4.6 asset pack) is the source of truth: every skin has a `coworker_*.scn`
+scene that defines the rig (per-part texture, position, scale, z-order). Offsets are **extracted
+from the scene**, not guessed.
+
+- Extract from the user's `BitBuddy.pck` with `godotpcktool` (committed helper script/tool):
+  - `coworker_1036.scn` (alien_cat's rig scene)
+  - `assets/skins/alien_cat/*.png.import` (ctex → png provenance)
+- Parse the scene:
+  - **Text path** (`.scn` as `[gd_scene` text): `github.com/atomicptr/godot-tscn-parser` → walk
+    `Sprite2D` nodes → per-part `position`, `scale`, `z_index`, texture ref.
+  - **Binary path** (`.scn` as `GDSC` binary): a small committed Godot project + headless `godot4`
+    script that loads the scene and dumps node transforms to JSON.
+- Map each node's texture ref to the PNG filename (via `.import`), then **auto-generate** the
+  `[character.parts]` + `[character.offsets]` tables in `manifest.toml`.
+- Result: a real skin installs into `~/.local/share/pngtuber/assets/` with correct composition, no
+  hand-tuning.
+
 ---
 
 ## 6. Milestones
@@ -269,7 +290,7 @@ copyrighted and must not be distributed):
 | 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ☐ |
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ☐ |
 | 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ☐ |
-| 7 | Asset data dir + first skin | `assets.go` resolution, `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS | ☐ |
+| 7 | Asset data dir + first skin | `assets.go` resolution, scene→manifest tool (§5.8), `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS with offsets derived from `coworker_1036.scn` | ☐ |
 | 8 | Asset integration (more skins) | Real rigs wired in for other skins as desired | Skin selection + per-skin parts/offsets work without code changes | ☐ |
 
 ### Suggested order rationale
@@ -303,10 +324,10 @@ skins.
 | evdev requires `/dev/input` read perms | Medium | Clear README instructions (`input` group); graceful mic-only degradation + warning |
 | Wayland window capture in OBS | Medium | Primary X11 path is Game Capture transparency; document PipeWire Video capture for Wayland |
 | PulseAudio/PipeWire not running | Low | Log clear warning; degrade gracefully to input-only mode; README documents starting the daemon |
-| Real assets unknown format | Low | Data-driven manifest + `frame_size` config; assume standard sprite-sheet grid |
+| `.scn` scene format is text or binary (unknown until extracted) | Medium | Detect on extraction; text → Go tscn parser, binary → headless Godot dump (§5.8) |
 | Transparent window needs compositor (X11) | Low | Document compositor requirement in README (same caveat as Bevy) |
 | cgo/GLFW build needs X11+OpenGL dev headers | Low | `shell.nix` on NixOS; documented `libx11-dev`/`libgl-dev` for other distros |
-| BitBuddy assets are copyrighted (can't ship/commit) | Medium | Assets load from a user data dir (`~/.local/share/pngtuber/assets/`); repo ships docs + placeholder only |
+| BitBuddy assets are copyrighted (can't ship/commit) | Medium | Assets load from a user data dir (`~/.local/share/pngtuber/assets/`); repo ships docs + tooling only, never the art |
 
 ---
 
@@ -322,7 +343,8 @@ skins.
 
 > Resolved in this revision: config format → **TOML**; mouse detail → **track cursor position**;
 > mic → **jfreymuth/pulse (pure Go)**; engine → **Ebitengine v2.9**; animation assets → **rig parts
-> (composited PNGs), not sprite sheets**; BitBuddy assets → **user data dir, not committed**.
+> (composited PNGs), not sprite sheets**; BitBuddy assets → **user data dir, not committed**;
+> part offsets → **auto-derived from the skin's `coworker_*.scn` scene**, not hand-tuned (§5.8).
 
 ---
 
@@ -348,7 +370,8 @@ needs X11/OpenGL dev headers to build and GL libs on the runtime loader path. Th
 Next slice: **Milestone 2** — evdev goroutine → `ActivitySignals`, logged to console.
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
-eye, eyelid, hands, mouth shapes) with no scene metadata in the extracted pack, so part offsets must
-be hand-tuned via the manifest. Assets are copyrighted (Saltfish) and load from a user data dir
-(`~/.local/share/pngtuber/assets/`); the repo ships only docs + a placeholder. See §5.6–5.7 and
-`docs/bitbuddy-assets.md`.
+eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
+scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the
+scene** (§5.8) instead of hand-tuned. Assets are copyrighted (Saltfish) and load from a user data
+dir (`~/.local/share/pngtuber/assets/`); the repo ships only docs + tooling + a placeholder. See
+§5.6–5.8 and `docs/bitbuddy-assets.md`.
