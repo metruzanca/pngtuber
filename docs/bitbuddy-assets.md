@@ -63,16 +63,23 @@ go run ./tools/scene2manifest -dump nodes.json -skin alien_cat -out manifest.tom
 
 This maps the coworker node naming (`LeftHandUp/Down` → `left` variants,
 `Mouth1..3` → `mouth` frames, …), converts Sprite2D **centers** to top-left
-offsets, normalizes the rig to the origin, orders parts by `z_index`, and
-emits `[character.parts]`, `[character.offsets]`, `[character.variants]` and
-`[character.animations]` (blink + mouth talk).
+offsets, normalizes the rig to the origin, adds the shared desk environment
+(desk + keyboard + mouse device) and orders parts by layer, and emits
+`[character.parts]`, `[character.offsets]`, `[character.variants]`,
+`[character.animations]` (blink + mouth talk + breathing + hand-move debounce)
+and `[character.tracking]` (the mouse hand follows the cursor).
 
 ## 4. Copy the skin into pngtuber's data dir
+
+The generated manifest also references the **shared desk environment** (desk,
+keyboard, mouse device), so copy those alongside the skin:
 
 ```sh
 SKIN="$HOME/.local/share/pngtuber/assets/skins/alien_cat"
 mkdir -p "$SKIN"
 cp /home/…/assets/skins/alien_cat/*.png "$SKIN/"
+cp /home/…/assets/desks/desk_1.png /home/…/assets/keyboards/keyboard_1.png \
+   /home/…/assets/mouse/mouse_1.png "$SKIN/"
 cp manifest.toml "$SKIN/manifest.toml"
 ```
 
@@ -82,9 +89,10 @@ cp manifest.toml "$SKIN/manifest.toml"
 pngtuber --skin alien_cat            # or: PNGTUBER_SKIN=alien_cat pngtuber
 ```
 
-The window auto-sizes to the rig's bounding box (alien_cat → 154×149) and the
-composite is built from the scene-derived offsets, so it renders correctly in
-OBS Game Capture ("Allow Transparency") / PipeWire without hand-tuning.
+The window auto-sizes to the desk rig's bounding box (alien_cat → 320×251)
+and the composite is built from the scene-derived offsets plus the desk
+environment, so it renders correctly in OBS Game Capture ("Allow
+Transparency") / PipeWire without hand-tuning.
 
 ## Asset layout reference
 

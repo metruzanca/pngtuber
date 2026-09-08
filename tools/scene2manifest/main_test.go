@@ -57,6 +57,31 @@ func TestBuildManifestPrefersBodyNoMouth(t *testing.T) {
 	}
 }
 
+// TestBuildManifestEmitsDesk verifies the shared desk environment parts are
+// always emitted and ordered behind the character, before the hands.
+func TestBuildManifestEmitsDesk(t *testing.T) {
+	nodes := []node{
+		{Name: "Body", Type: "Sprite2D", Pos: []float64{150, 68}, ZIndex: 0, Texture: "res://b.png", TexSize: []int{40, 40}},
+		{Name: "LeftHandUp", Type: "Sprite2D", Pos: []float64{100, 50}, ZIndex: 6, Texture: "res://l.png", TexSize: []int{20, 20}},
+	}
+	out := buildManifest(nodes, "test")
+	for _, want := range []string{
+		`parts_order = ["desk", "body", "keyboard", "mouse_dev", "left"]`,
+		`desk     = ["desk_1.png"]`,
+		`keyboard = ["keyboard_1.png"]`,
+		`mouse_dev = ["mouse_1.png"]`,
+		`[character.tracking]`,
+		`hand_move_delay_secs = 1.0`,
+		`breathing = { parts = ["body", "head"]`,
+		`left   = { typing = 1, gaming = 1 }`,
+		`mouse  = { mouse = 1, gaming = 1 }`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
 // TestBuildManifestNormalizesOffsets verifies offsets are scene-derived and
 // normalized so the rig starts at (0,0), independent of code.
 func TestBuildManifestNormalizesOffsets(t *testing.T) {
@@ -67,17 +92,17 @@ func TestBuildManifestNormalizesOffsets(t *testing.T) {
 		{Name: "Body", Type: "Sprite2D", Pos: []float64{150, 120}, ZIndex: 0, Texture: "res://b.png", TexSize: []int{40, 40}},
 	}
 	out := buildManifest(nodes, "test")
-	// min offset is (90,40); body -> (130-90, 100-40) = (40,60); left -> (0,0).
-	if !strings.Contains(out, "body     = [{ x = 40, y = 60 }]") {
+	// Desk is injected at (0,148), so min is (0,40): body -> (130,60), left -> (90,0).
+	if !strings.Contains(out, "body     = [{ x = 130, y = 60 }]") {
 		t.Errorf("body offset not normalized, got:\n%s", out)
 	}
-	if !strings.Contains(out, "left     = [{ x = 0, y = 0 }]") {
+	if !strings.Contains(out, "left     = [{ x = 90, y = 0 }]") {
 		t.Errorf("left offset not normalized, got:\n%s", out)
 	}
 }
 
-// TestBuildManifestPartOrder verifies z-order: body (z0) before eyelid (z1)
-// before left (z6), with head before eye on z ties.
+// TestBuildManifestPartOrder verifies the deliberate layering: desk environment
+// at the back, then the character, then the hands last.
 func TestBuildManifestPartOrder(t *testing.T) {
 	nodes := []node{
 		{Name: "LeftHandUp", Type: "Sprite2D", Pos: []float64{0, 0}, ZIndex: 6, Texture: "res://l.png", TexSize: []int{10, 10}},
@@ -87,7 +112,7 @@ func TestBuildManifestPartOrder(t *testing.T) {
 		{Name: "Eyelid", Type: "Sprite2D", Pos: []float64{0, 0}, ZIndex: 1, Texture: "res://lid.png", TexSize: []int{10, 10}},
 	}
 	out := buildManifest(nodes, "test")
-	want := `parts_order = ["body", "head", "eye", "eyelid", "left"]`
+	want := `parts_order = ["desk", "body", "head", "eye", "eyelid", "keyboard", "mouse_dev", "left"]`
 	if !strings.Contains(out, want) {
 		t.Errorf("parts_order mismatch, got:\n%s", out)
 	}

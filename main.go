@@ -128,7 +128,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	cw, ch := g.canvasSize()
 	cx, cy := ebiten.CursorPosition()
 	lx, ly := lookOffset(cx, cy, cw, ch, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
-	g.char.Draw(screen, lx, ly)
+	tx, ty := lookOffset(cx, cy, cw, ch, g.cfg.Character.Tracking.MaxX, g.cfg.Character.Tracking.MaxY)
+	g.char.Draw(screen, lx, ly, tx, ty)
 
 	talking := "no"
 	if g.micTalking {

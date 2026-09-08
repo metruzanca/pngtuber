@@ -12,13 +12,17 @@ func testConfig() CharacterConfig {
 	return CharacterConfig{
 		Variants: map[string]map[string]int{
 			"left":   {"typing": 1, "gaming": 1},
-			"right":  {"mouse": 1, "gaming": 1},
+			"right":  {"typing": 1, "gaming": 1},
+			"mouse":  {"mouse": 1, "gaming": 1},
 			"eyelid": {"sleep": 1},
 		},
 		Animations: AnimationsConfig{
-			Mouth: MouthAnimConfig{Part: "mouth", FPS: 10},
-			Blink: BlinkAnimConfig{Part: "eyelid", ClosedVariant: 1, IntervalSecs: 3.0, DurationSecs: 0.15},
+			Mouth:             MouthAnimConfig{Part: "mouth", FPS: 10},
+			Blink:             BlinkAnimConfig{Part: "eyelid", ClosedVariant: 1, IntervalSecs: 3.0, DurationSecs: 0.15},
+			Breathing:         BreathingConfig{Parts: []string{"body", "head"}, PeriodSecs: 4.0, Amplitude: 0.015},
+			HandMoveDelaySecs: 1.0,
 		},
+		Tracking: TrackingConfig{Parts: []string{"mouse", "mouse_dev"}, MaxX: 20, MaxY: 12},
 	}
 }
 
@@ -71,33 +75,37 @@ func TestVariantSelectionHands(t *testing.T) {
 		state ActivityState
 		left  int
 		right int
+		mouse int
 	}{
-		{Idle, 0, 0},
-		{Typing, 1, 0},
-		{Mouse, 0, 1},
-		{Gaming, 1, 1},
-		{Talking, 0, 0},
-		{Sleep, 0, 0},
+		{Idle, 0, 0, 0},
+		{Typing, 1, 1, 0},
+		{Mouse, 0, 0, 1},
+		{Gaming, 1, 1, 1},
+		{Talking, 0, 0, 0},
+		{Sleep, 0, 0, 0},
 	}
 	for _, tc := range cases {
-		c.state = tc.state
+		c.hands = tc.state
 		if got := c.variantIndex("left"); got != tc.left {
 			t.Errorf("%s: left = %d, want %d", tc.state, got, tc.left)
 		}
 		if got := c.variantIndex("right"); got != tc.right {
 			t.Errorf("%s: right = %d, want %d", tc.state, got, tc.right)
 		}
+		if got := c.variantIndex("mouse"); got != tc.mouse {
+			t.Errorf("%s: mouse = %d, want %d", tc.state, got, tc.mouse)
+		}
 	}
 }
 
 func TestVariantSelectionEyelid(t *testing.T) {
 	c := testCharacter()
-	c.state = Sleep
+	c.raw = Sleep
 	if got := c.variantIndex("eyelid"); got != 1 {
 		t.Fatalf("sleep eyelid = %d, want 1 (closed)", got)
 	}
 
-	c.state = Idle
+	c.raw = Idle
 	if got := c.variantIndex("eyelid"); got != 0 {
 		t.Fatalf("awake eyelid = %d, want 0 (open)", got)
 	}
@@ -112,7 +120,7 @@ func TestVariantSelectionMouth(t *testing.T) {
 	if got := c.variantIndex("mouth"); got != 0 {
 		t.Fatalf("non-talking mouth = %d, want 0 (closed)", got)
 	}
-	c.state = Talking
+	c.raw = Talking
 	c.mouth.elapsed = 0.2
 	if got := c.variantIndex("mouth"); got != 2 {
 		t.Fatalf("talking mouth = %d, want 2", got)
@@ -121,7 +129,7 @@ func TestVariantSelectionMouth(t *testing.T) {
 
 func TestSetStateResetsAnimation(t *testing.T) {
 	c := testCharacter()
-	c.state = Talking
+	c.raw = Talking
 	c.mouth.elapsed = 5.0
 	c.Update(0.05)
 	if c.mouth.index() == 0 {
@@ -135,6 +143,75 @@ func TestSetStateResetsAnimation(t *testing.T) {
 	c.SetState(Talking)
 	if got := c.variantIndex("mouth"); got != 0 {
 		t.Errorf("mouth after re-enter = %d, want 0", got)
+	}
+}
+
+func TestHandMoveDelay(t *testing.T) {
+	c := testCharacter()
+	// Committed hands are Idle; typing arrives but the hands must wait.
+	c.SetState(Typing)
+	c.Update(0.5)
+	if c.hands != Idle {
+		t.Fatalf("hands = %s before delay, want idle", c.hands)
+	}
+	c.Update(0.6)
+	if c.hands != Typing {
+		t.Fatalf("hands = %s after delay, want typing", c.hands)
+	}
+}
+
+func TestHandMoveDelayFlicker(t *testing.T) {
+	c := testCharacter()
+	// The mouse hand is committed on the mouse (gaming). A brief mouse stall
+	// flips the raw state to Typing and back — the hands must never move.
+	c.hands = Gaming
+	c.raw = Gaming
+	c.SetState(Typing) // stall
+	c.Update(0.5)
+	c.SetState(Gaming) // mouse resumes before the delay elapses
+	c.Update(0.5)
+	if c.hands != Gaming {
+		t.Fatalf("hands = %s after flicker, want gaming (mouse hand stays)", c.hands)
+	}
+	// A genuine sustained switch to typing does move the hands.
+	c.SetState(Typing)
+	c.Update(1.1)
+	if c.hands != Typing {
+		t.Fatalf("hands = %s after sustained typing, want typing", c.hands)
+	}
+}
+
+func TestHandMoveSleepInstant(t *testing.T) {
+	c := testCharacter()
+	c.SetState(Typing)
+	c.Update(1.1) // hands commit to typing (delay is 1.0s)
+	if c.hands != Typing {
+		t.Fatalf("hands = %s, want typing", c.hands)
+	}
+	c.SetState(Sleep)
+	c.Update(0.01) // sleep entry is instant
+	if c.hands != Sleep {
+		t.Fatalf("hands = %s after sleep, want sleep", c.hands)
+	}
+	c.SetState(Gaming)
+	c.Update(0.01) // waking is instant too
+	if c.hands != Gaming {
+		t.Fatalf("hands = %s after wake, want gaming", c.hands)
+	}
+}
+
+func TestMouthInstantWhileHandsDebounced(t *testing.T) {
+	c := testCharacter()
+	c.SetState(Talking) // talking arrives, hands still committed to idle
+	c.Update(0.05)
+	if c.hands != Idle {
+		t.Fatalf("hands = %s, want idle (debounced)", c.hands)
+	}
+	if got := c.variantIndex("mouth"); got != c.mouth.index() {
+		t.Fatalf("mouth should animate instantly, got %d", got)
+	}
+	if got := c.variantIndex("left"); got != 0 {
+		t.Fatalf("left = %d, want 0 (hands not moved by talking)", got)
 	}
 }
 
@@ -232,18 +309,18 @@ func TestManifestDrivenBehavior(t *testing.T) {
 
 	// Mapping present: typing shows variant 1.
 	c := build("left = { typing = 1 }")
-	c.state = Typing
+	c.hands = Typing
 	if got := c.variantIndex("left"); got != 1 {
 		t.Fatalf("left/typing = %d, want 1", got)
 	}
-	c.state = Idle
+	c.hands = Idle
 	if got := c.variantIndex("left"); got != 0 {
 		t.Fatalf("left/idle = %d, want 0 (unmapped -> default)", got)
 	}
 
 	// Edit the manifest (remove the mapping): same state now shows variant 0.
 	c2 := build("")
-	c2.state = Typing
+	c2.hands = Typing
 	if got := c2.variantIndex("left"); got != 0 {
 		t.Fatalf("left/typing after edit = %d, want 0", got)
 	}

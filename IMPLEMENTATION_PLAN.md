@@ -449,6 +449,22 @@ install under `~/.local/share/pngtuber/assets/skins/` and load via `--skin`/`PNG
 no code changes: alien_cat → 154×149, frog → 165×128 (auto-sized windows). Full suite + vet +
 build + gofmt clean. **All 8 milestones complete.**
 
+**Post-milestone behavior pass:** reworked the character so it sits at a **desk**: the generated
+manifests now include the shared desk environment (`desk_1.png`, `keyboard_1.png`, `mouse_1.png`
+as static `desk`/`keyboard`/`mouse_dev` parts layered behind/under the character), the body+head
+get a subtle **breathing** animation (`[character.animations] breathing`), the **mouse hand + mouse
+device track the real cursor** while the mouse is active (`[character.tracking]`), typing presses
+**both keyboard hands**, mouse-only uses the **mouse hand**, and gaming uses **mouse hand + a
+keyboard hand** (`[character.variants]`). Hand-layout changes are **debounced** by
+`hand_move_delay_secs = 1.0` (a raw/committed split in `Character`): the mouse hand only relocates
+to the keyboard after the raw state has been stable ~1s, so brief mouse stalls during gaming never
+make the character flicker between mouse and keyboard; sleep/wake and mouth stay instant. Layout
+was reconstructed from the coworker scene's hand anchor points because the game positions its
+desk/keyboard/mouse at runtime (sub-scenes dump to origin). Verified: unit tests (hand debounce,
+flicker, instant sleep/wake, instant mouth, variant mapping, desk emission), headless per-state
+composite pixel checks (desk renders, hands switch between idle/typing/mouse), and live runs —
+alien_cat 320×251, frog 320×234.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

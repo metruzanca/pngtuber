@@ -120,13 +120,24 @@ func (r *Rig) normalize() {
 }
 
 // Character composes the rig parts and switches variants by activity state.
+//
+// The character keeps two states: `raw` is the activity machine's current
+// state (set instantly); `hands` is the *committed* state that drives the hand
+// layout. The committed state only changes after `hand_move_delay_secs` of
+// stability, so the mouse hand doesn't flicker between the mouse and keyboard
+// during gaming pauses. Mouth (speech) and eyelid (sleep/blink) react to the
+// raw state immediately.
 type Character struct {
 	rig      *Rig
-	state    ActivityState
+	raw      ActivityState
+	hands    ActivityState
 	variants map[string]map[string]int
 	anim     AnimationsConfig
+	tracking TrackingConfig
 	mouth    frameLoop
 
+	handTimer   float64
+	breathPhase float64
 	timeToBlink float64
 	blinkT      float64
 	blinking    bool
@@ -141,9 +152,11 @@ func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
 	}
 	c := &Character{
 		rig:      rig,
-		state:    Idle,
+		raw:      Idle,
+		hands:    Idle,
 		variants: cc.Variants,
 		anim:     cc.Animations,
+		tracking: cc.Tracking,
 		mouth:    frameLoop{fps: mouthFPS, nframes: len(rig.parts[cc.Animations.Mouth.Part])},
 	}
 	if c.anim.Blink.IntervalSecs <= 0 {
@@ -156,22 +169,41 @@ func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
 	return c
 }
 
-// SetState switches the active activity state, resetting animated variants.
+// SetState records the activity machine's current state. The committed hand
+// state lags behind per hand_move_delay_secs; mouth/eyelid react instantly.
 func (c *Character) SetState(s ActivityState) {
-	if c.state == s {
+	if c.raw == s {
 		return
 	}
-	c.state = s
+	c.raw = s
 	c.mouth.reset()
-	c.blinking = false
-	c.blinkT = 0
-	c.timeToBlink = c.anim.Blink.IntervalSecs
 }
 
 // Update advances the animation clocks by dt seconds (real elapsed time).
 func (c *Character) Update(dt float64) {
 	c.mouth.update(dt)
-	if c.anim.Blink.Part == "" || c.state == Sleep {
+	if c.anim.Breathing.PeriodSecs > 0 {
+		c.breathPhase += dt
+	}
+
+	// Hand-layout debounce: sleep entry/exit is instant; otherwise the hands
+	// only relocate after the raw state has been stable for the delay.
+	delay := c.anim.HandMoveDelaySecs
+	switch {
+	case c.raw == Sleep || c.hands == Sleep:
+		c.hands = c.raw
+		c.handTimer = 0
+	case c.raw != c.hands:
+		c.handTimer += dt
+		if delay <= 0 || c.handTimer >= delay {
+			c.hands = c.raw
+			c.handTimer = 0
+		}
+	default:
+		c.handTimer = 0
+	}
+
+	if c.anim.Blink.Part == "" || c.raw == Sleep {
 		// No blink configured, or asleep (eyelid forced closed via variants).
 		return
 	}
@@ -187,18 +219,23 @@ func (c *Character) Update(dt float64) {
 	}
 }
 
-// variantIndex returns which variant image of a part to show for the current
-// state. Resolution order: the manifest's per-state [character.variants]
-// mapping, then the dynamic behaviors (mouth talk animation, blink). Variant 0
-// is the default/calm variant for every part.
+// variantIndex returns which variant image of a part to show. Resolution
+// order: the manifest's per-state [character.variants] mapping against the
+// committed hand state (raw state for the mouth and eyelid parts), then the
+// dynamic behaviors (mouth talk animation, blink). Variant 0 is the
+// default/calm variant for every part.
 func (c *Character) variantIndex(part string) int {
+	if part == c.anim.Mouth.Part && c.raw == Talking {
+		return c.mouth.index()
+	}
+	state := c.hands
+	if part == c.anim.Blink.Part {
+		state = c.raw // eyelid responds to sleep instantly
+	}
 	if m, ok := c.variants[part]; ok {
-		if idx, ok := m[c.state.String()]; ok {
+		if idx, ok := m[state.String()]; ok {
 			return idx
 		}
-	}
-	if part == c.anim.Mouth.Part && c.state == Talking {
-		return c.mouth.index()
 	}
 	if part == c.anim.Blink.Part && c.blinking {
 		return c.anim.Blink.ClosedVariant
@@ -207,9 +244,20 @@ func (c *Character) variantIndex(part string) int {
 }
 
 // Draw composes the parts in manifest order with their offsets, applying the
-// cursor look offset to the head and eye parts. Hidden variants (nil) are
-// skipped.
-func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
+// cursor look offset to the head and eye parts, the breathing scale, and the
+// mouse tracking offset to tracked parts while the mouse is active. Hidden
+// variants (nil) are skipped.
+func (c *Character) Draw(screen *ebiten.Image, lookX, lookY, trackX, trackY float64) {
+	breathe := map[string]bool{}
+	for _, p := range c.anim.Breathing.Parts {
+		breathe[p] = true
+	}
+	track := map[string]bool{}
+	for _, p := range c.tracking.Parts {
+		track[p] = true
+	}
+	mouseActive := c.hands == Mouse || c.hands == Gaming
+
 	for _, part := range c.rig.order {
 		imgs := c.rig.parts[part]
 		if len(imgs) == 0 {
@@ -222,19 +270,32 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 		if imgs[idx] == nil {
 			continue
 		}
-		op := &ebiten.DrawImageOptions{}
 		offs := c.rig.offsets[part]
-		if len(offs) > 0 {
-			off := offs[0]
-			if idx < len(offs) {
-				off = offs[idx]
-			}
-			lx, ly := 0.0, 0.0
-			if part == "head" || part == "eye" {
-				lx, ly = lookX, lookY
-			}
-			op.GeoM.Translate(float64(off.X)+lx, float64(off.Y)+ly)
+		if len(offs) == 0 {
+			continue
 		}
+		off := offs[0]
+		if idx < len(offs) {
+			off = offs[idx]
+		}
+
+		op := &ebiten.DrawImageOptions{}
+		w, h := imgs[idx].Bounds().Dx(), imgs[idx].Bounds().Dy()
+		if breathe[part] && c.anim.Breathing.PeriodSecs > 0 {
+			scale := 1 + c.anim.Breathing.Amplitude*math.Sin(2*math.Pi*c.breathPhase/c.anim.Breathing.PeriodSecs)
+			op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
+			op.GeoM.Scale(scale, scale)
+			op.GeoM.Translate(float64(w)/2, float64(h)/2)
+		}
+		lx, ly := 0.0, 0.0
+		if part == "head" || part == "eye" {
+			lx, ly = lookX, lookY
+		}
+		tx, ty := 0.0, 0.0
+		if track[part] && mouseActive {
+			tx, ty = trackX, trackY
+		}
+		op.GeoM.Translate(float64(off.X)+lx+tx, float64(off.Y)+ly+ty)
 		screen.DrawImage(imgs[idx], op)
 	}
 }

@@ -14,15 +14,16 @@ type Config struct {
 }
 
 // CharacterConfig describes the rig parts (composited PNGs), their composition
-// offsets/z-order, the per-state variant mapping, animation parameters, and
-// cursor look tracking. Everything here is data-driven: editing the manifest
-// changes behavior without recompiling.
+// offsets/z-order, the per-state variant mapping, animation parameters, cursor
+// look tracking, and hand/mouse tracking. Everything here is data-driven:
+// editing the manifest changes behavior without recompiling.
 type CharacterConfig struct {
 	Skin       string                    `toml:"skin"`
 	PartsOrder []string                  `toml:"parts_order"`
 	Parts      map[string][]string       `toml:"parts"`
 	Offsets    map[string][]Offset       `toml:"offsets"`
 	Look       LookConfig                `toml:"look"`
+	Tracking   TrackingConfig            `toml:"tracking"`
 	Variants   map[string]map[string]int `toml:"variants"`
 	Animations AnimationsConfig          `toml:"animations"`
 }
@@ -41,11 +42,26 @@ type LookConfig struct {
 	MaxY float64 `toml:"max_y"`
 }
 
-// AnimationsConfig describes the two built-in dynamic part behaviors. Both are
-// optional: leave a part empty to disable the behavior.
+// TrackingConfig makes parts follow the cursor (e.g. the hand on the mouse),
+// clamped to max px per axis. Parts only move while the committed hand state
+// is Mouse or Gaming.
+type TrackingConfig struct {
+	Parts []string `toml:"parts"`
+	MaxX  float64  `toml:"max_x"`
+	MaxY  float64  `toml:"max_y"`
+}
+
+// AnimationsConfig describes the built-in dynamic part behaviors. All are
+// optional: leave a part empty (or amplitude 0) to disable a behavior.
 type AnimationsConfig struct {
 	Mouth MouthAnimConfig `toml:"mouth"`
 	Blink BlinkAnimConfig `toml:"blink"`
+	// Breathing subtly scales parts (body/head) about their centers.
+	Breathing BreathingConfig `toml:"breathing"`
+	// HandMoveDelaySecs debounces hand-layout changes: the hands only relocate
+	// to a new state's pose after the raw state has been stable this long, so
+	// the character doesn't flicker between mouse and keyboard during gaming.
+	HandMoveDelaySecs float64 `toml:"hand_move_delay_secs"`
 }
 
 // MouthAnimConfig makes a part cycle its variant sequence while Talking.
@@ -60,6 +76,13 @@ type BlinkAnimConfig struct {
 	ClosedVariant int     `toml:"closed_variant"`
 	IntervalSecs  float64 `toml:"interval_secs"`
 	DurationSecs  float64 `toml:"duration_secs"`
+}
+
+// BreathingConfig scales a set of parts about their centers.
+type BreathingConfig struct {
+	Parts      []string `toml:"parts"`
+	PeriodSecs float64  `toml:"period_secs"`
+	Amplitude  float64  `toml:"amplitude"`
 }
 
 // ActivityConfig holds the state machine timings and mic threshold.

@@ -7,7 +7,10 @@ and mirrors your behavior. Capture it as a stream element in OBS.
 **Status: Milestones 1–8 complete** — transparent undecorated window, global input pipeline, mic
 capture + talking detection, the activity state machine, the rig character (state→variant parts,
 elapsed-time animation, cursor tracking), a fully data-driven manifest, the asset data-dir pipeline
-(scene-derived skins from a user-owned BitBuddy copy), and multi-skin selection. See
+(scene-derived skins from a user-owned BitBuddy copy), and multi-skin selection. The character sits
+at a desk with keyboard + mouse: body/head breathe, typing presses both hands, the mouse hand tracks
+the real cursor, gaming uses mouse + keyboard together, and hand changes are debounced so the
+character doesn't flicker between mouse and keyboard. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap and
 [docs/bitbuddy-assets.md](docs/bitbuddy-assets.md) for installing real skins.
 
