@@ -279,7 +279,7 @@ func buildManifest(nodes []node, skin string) string {
 		fmt.Fprintf(&b, "blink = { part = \"\", closed_variant = 0, interval_secs = 0, duration_secs = 0 }\n")
 	}
 
-	fmt.Fprintf(&b, "\n[character.tracking]\nparts = [\"mouse\", \"mouse_dev\"]\nmax_x = 20\nmax_y = 12\n")
+	fmt.Fprintf(&b, "\n[character.tracking]\nparts = [\"mouse\", \"mouse_dev\"]\nmax_x = 20\nmax_y = 12\nsensitivity = 0.02\n")
 	fmt.Fprintf(&b, "\n[character.look]\nparts = []\nmax_x = 10\nmax_y = 10\n")
 	fmt.Fprintf(&b, "\n[activity]\nidle_after_secs = 5.0\nsleep_after_secs = 120.0\nmic_threshold = 0.08\nmic_hysteresis = 0.5\ngaming_window_secs = 1.0\n")
 	return b.String()

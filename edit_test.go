@@ -161,3 +161,79 @@ func TestLookPartsConfig(t *testing.T) {
 		t.Errorf("Look.Parts = %v, want [head]", cfg.Character.Look.Parts)
 	}
 }
+
+func TestMouseTrackingIntegratesAndClamps(t *testing.T) {
+	c := testCharacter()
+	c.hands = Mouse // mouse active
+	c.UpdateMouse(500, -300, 0.016)
+	// 500*0.02 = 10, -300*0.02 = -6.
+	if c.mouseOffX != 10 || c.mouseOffY != -6 {
+		t.Fatalf("mouseOff = %v,%v want 10,-6", c.mouseOffX, c.mouseOffY)
+	}
+	// Large motion clamps to MaxX/MaxY (20/12).
+	c.UpdateMouse(2000, 2000, 0.016)
+	if c.mouseOffX != 20 || c.mouseOffY != 12 {
+		t.Fatalf("clamped mouseOff = %v,%v want 20,12", c.mouseOffX, c.mouseOffY)
+	}
+}
+
+func TestMouseTrackingDecaysWhenInactive(t *testing.T) {
+	c := testCharacter()
+	c.hands = Mouse
+	c.UpdateMouse(500, 300, 0.016)
+	if c.mouseOffX == 0 {
+		t.Fatal("mouse should have moved")
+	}
+	c.hands = Typing // mouse hand rests
+	// Over enough time it springs back to center.
+	for i := 0; i < 100; i++ {
+		c.UpdateMouse(0, 0, 0.1)
+	}
+	if c.mouseOffX != 0 || c.mouseOffY != 0 {
+		t.Fatalf("mouseOff should decay to 0, got %v,%v", c.mouseOffX, c.mouseOffY)
+	}
+}
+
+func TestMouseTrackingSteadyResets(t *testing.T) {
+	c := testCharacter()
+	c.hands = Mouse
+	c.UpdateMouse(500, 300, 0.016)
+	c.SetSteady(true)
+	if c.mouseOffX != 0 || c.mouseOffY != 0 {
+		t.Fatalf("steady should reset mouseOff, got %v,%v", c.mouseOffX, c.mouseOffY)
+	}
+}
+
+// TestExitEditModeSaves verifies that leaving edit mode persists the offsets.
+func TestExitEditModeSaves(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "manifest.toml")
+	orig := "[character]\nskin = \"t\"\n\n[character.offsets]\nbody = [{ x = 1, y = 2 }]\n"
+	if err := os.WriteFile(path, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rig, err := LoadRig(cfg, dir) // no part images; rig.normalize handles it
+	if err != nil {
+		t.Fatal(err)
+	}
+	rig.order = []string{"body"}
+	rig.offsets["body"][0] = Offset{X: 42, Y: 7} // simulate a drag
+	g := &Game{manifestPath: path, char: NewCharacter(rig, cfg.Character)}
+
+	g.setEditMode(false) // exit (no-op since not on) — should not save
+
+	// Enter then exit edit mode: positions must be persisted.
+	g.setEditMode(true)
+	g.setEditMode(false)
+	cfg2, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("saved manifest does not parse: %v", err)
+	}
+	if got := cfg2.Character.Offsets["body"][0]; got != (Offset{X: 42, Y: 7}) {
+		t.Errorf("exiting edit mode did not save: body = %+v, want {42 7}", got)
+	}
+}

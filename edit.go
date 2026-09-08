@@ -81,7 +81,7 @@ func (g *Game) handleEdit() {
 }
 
 // setEditMode toggles the editor, pausing transient animations so parts can
-// be dragged at their true positions.
+// be dragged at their true positions. Exiting saves the current offsets.
 func (g *Game) setEditMode(on bool) {
 	g.edit.active = on
 	g.edit.dragging = ""
@@ -89,8 +89,12 @@ func (g *Game) setEditMode(on bool) {
 	g.char.SetSteady(on)
 	if on {
 		log.Printf("edit: mode on — drag parts with the mouse, S to save offsets, Esc to exit")
+		return
+	}
+	if err := g.saveOffsets(); err != nil {
+		log.Printf("edit: exit save failed: %v", err)
 	} else {
-		log.Printf("edit: mode off")
+		log.Printf("edit: mode off — offsets saved")
 	}
 }
 

@@ -477,6 +477,17 @@ alternating hands), instead of holding a static down pose while typing; the stat
 incl. reload, hit-test, drag shift, press alternation + decay, look-parts config), headless
 composite per state, and live edit-mode smoke tests (toggle, drag grab, save, exit).
 
+**Follow-up fixes:** (1) **Exit edit mode now saves** — `setEditMode(false)` (Esc or toggling F2
+off) persists the current offsets to the manifest automatically; S still works mid-session. (2) The
+**mouse hand now tracks the real mouse even when the window is unfocused**: the input backend's
+channel carries relative pointer motion (`Event{DX,DY}` from `EV_REL`), `ActivitySignals` accumulates
+`MouseDX/MouseDY`, and `Character.UpdateMouse` integrates them into a clamped drifting offset
+(`[character.tracking] sensitivity = 0.02`) that `Draw` applies to the tracking parts — replacing
+the old `ebiten.CursorPosition()`-based tracking that only worked while focused. `Sensitivity` was
+added to `TrackingConfig` and emitted by the tool. Verified: input delta accumulation, `eventFrom`
+REL mapping, `UpdateMouse` integrate/clamp/decay/steady-reset, exit-save persistence tests; live run
+confirmed global mouse motion flows while the window stayed unfocused.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

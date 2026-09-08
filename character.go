@@ -148,6 +148,10 @@ type Character struct {
 	pressIndex int
 	pressTimer map[string]float64
 	steady     bool // edit mode: pause breathing for stable dragging
+
+	// mouse hand tracking (driven by global relative motion, focus-independent)
+	mouseOffX float64
+	mouseOffY float64
 }
 
 // NewCharacter creates a Character in the Idle state, driven by the manifest's
@@ -180,13 +184,62 @@ func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
 	if c.anim.Press.Variant <= 0 {
 		c.anim.Press.Variant = 1
 	}
+	if c.tracking.Sensitivity <= 0 {
+		c.tracking.Sensitivity = 0.02
+	}
 	c.timeToBlink = c.anim.Blink.IntervalSecs
 	return c
 }
 
-// SetSteady pauses transient animations (breathing) for edit mode so parts can
-// be dragged at their true positions.
-func (c *Character) SetSteady(steady bool) { c.steady = steady }
+// SetSteady pauses transient animations (breathing, mouse tracking) for edit
+// mode so parts can be dragged at their true positions.
+func (c *Character) SetSteady(steady bool) {
+	c.steady = steady
+	if steady {
+		c.mouseOffX = 0
+		c.mouseOffY = 0
+	}
+}
+
+// UpdateMouse integrates global relative mouse motion into the tracked parts'
+// offset (the hand on the mouse) while the committed state has the mouse
+// active; otherwise the offset springs back to rest. dx/dy are the relative
+// motion accumulated this tick by the input backend.
+func (c *Character) UpdateMouse(dx, dy int, dt float64) {
+	if len(c.tracking.Parts) == 0 {
+		return
+	}
+	if c.hands == Mouse || c.hands == Gaming {
+		c.mouseOffX += float64(dx) * c.tracking.Sensitivity
+		c.mouseOffY += float64(dy) * c.tracking.Sensitivity
+		c.mouseOffX = clampF(c.mouseOffX, -c.tracking.MaxX, c.tracking.MaxX)
+		c.mouseOffY = clampF(c.mouseOffY, -c.tracking.MaxY, c.tracking.MaxY)
+		return
+	}
+	// Mouse hand is resting: ease back to center.
+	decay := 1 - 8*dt
+	if decay < 0 {
+		decay = 0
+	}
+	c.mouseOffX *= decay
+	c.mouseOffY *= decay
+	if math.Abs(c.mouseOffX) < 0.01 {
+		c.mouseOffX = 0
+	}
+	if math.Abs(c.mouseOffY) < 0.01 {
+		c.mouseOffY = 0
+	}
+}
+
+func clampF(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
 
 // Press records key events: each one taps the next press part (alternating)
 // down for press.duration_secs.
@@ -336,9 +389,9 @@ func (c *Character) ShiftPart(part string, dx, dy int) {
 
 // Draw composes the parts in manifest order with their offsets, applying the
 // cursor look offset to configured parts, the breathing scale, and the mouse
-// tracking offset to tracked parts while the mouse is active. Hidden variants
-// (nil) are skipped.
-func (c *Character) Draw(screen *ebiten.Image, lookX, lookY, trackX, trackY float64) {
+// tracking offset (from UpdateMouse) to tracked parts while the mouse is
+// active. Hidden variants (nil) are skipped.
+func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 	breathe := map[string]bool{}
 	for _, p := range c.anim.Breathing.Parts {
 		breathe[p] = true
@@ -387,8 +440,8 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY, trackX, trackY floa
 			lx, ly = lookX, lookY
 		}
 		tx, ty := 0.0, 0.0
-		if track[part] && mouseActive {
-			tx, ty = trackX, trackY
+		if track[part] && mouseActive && !c.steady {
+			tx, ty = c.mouseOffX, c.mouseOffY
 		}
 		op.GeoM.Translate(float64(off.X)+lx+tx, float64(off.Y)+ly+ty)
 		screen.DrawImage(imgs[idx], op)

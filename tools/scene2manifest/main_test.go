@@ -71,6 +71,7 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 		`keyboard = ["keyboard_1.png"]`,
 		`mouse_dev = ["mouse_1.png"]`,
 		`[character.tracking]`,
+		`sensitivity = 0.02`,
 		`hand_move_delay_secs = 1.0`,
 		`breathing = { parts = ["body", "head"]`,
 		`press = { parts = ["left", "right"], duration_secs = 0.1, variant = 1 }`,

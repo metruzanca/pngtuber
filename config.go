@@ -44,13 +44,15 @@ type LookConfig struct {
 	MaxY  float64  `toml:"max_y"`
 }
 
-// TrackingConfig makes parts follow the cursor (e.g. the hand on the mouse),
-// clamped to max px per axis. Parts only move while the committed hand state
-// is Mouse or Gaming.
+// TrackingConfig makes parts follow the real mouse while the mouse is active,
+// clamped to max px per axis. Motion comes from the global input backend's
+// relative deltas (works with the window unfocused), scaled by Sensitivity
+// (px of drift per real mouse unit).
 type TrackingConfig struct {
-	Parts []string `toml:"parts"`
-	MaxX  float64  `toml:"max_x"`
-	MaxY  float64  `toml:"max_y"`
+	Parts       []string `toml:"parts"`
+	MaxX        float64  `toml:"max_x"`
+	MaxY        float64  `toml:"max_y"`
+	Sensitivity float64  `toml:"sensitivity"`
 }
 
 // AnimationsConfig describes the built-in dynamic part behaviors. All are

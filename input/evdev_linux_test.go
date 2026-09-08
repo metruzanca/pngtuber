@@ -70,3 +70,24 @@ func TestIsMouseButton(t *testing.T) {
 		t.Error("KEY_A should not be a mouse button")
 	}
 }
+
+func TestEventFromCarriesRelativeMotion(t *testing.T) {
+	ev, ok := eventFrom(evdev.InputEvent{Type: evdev.EV_REL, Code: evdev.REL_X, Value: 7})
+	if !ok || ev.Signal != MouseActivity || ev.DX != 7 {
+		t.Errorf("REL_X -> %+v, ok=%v", ev, ok)
+	}
+	ev, _ = eventFrom(evdev.InputEvent{Type: evdev.EV_REL, Code: evdev.REL_Y, Value: -3})
+	if ev.DY != -3 {
+		t.Errorf("REL_Y -> DY=%d, want -3", ev.DY)
+	}
+	// Non-motion events carry zero deltas.
+	ev, _ = eventFrom(evdev.InputEvent{Type: evdev.EV_KEY, Code: evdev.KEY_A, Value: 1})
+	if ev.Signal != KeyActivity || ev.DX != 0 || ev.DY != 0 {
+		t.Errorf("key press -> %+v", ev)
+	}
+	// Wheel motion counts as mouse activity but carries no X/Y delta.
+	ev, _ = eventFrom(evdev.InputEvent{Type: evdev.EV_REL, Code: evdev.REL_WHEEL, Value: 1})
+	if ev.Signal != MouseActivity || ev.DX != 0 {
+		t.Errorf("wheel -> %+v", ev)
+	}
+}

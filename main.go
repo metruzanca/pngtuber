@@ -35,6 +35,8 @@ type Game struct {
 	lastMicLog time.Time
 	prevKey    int
 	prevMouse  int
+	prevDX     int
+	prevDY     int
 	state      ActivityState
 	lastFrame  time.Time
 }
@@ -89,13 +91,28 @@ func (g *Game) Update() error {
 	g.updateMic()
 	g.updateActivity()
 	g.char.Update(dt)
+	g.updateMouse(dt)
 	return nil
+}
+
+// updateMouse feeds this tick's global relative mouse motion into the
+// character so the mouse hand tracks the real mouse even when the window is
+// unfocused. Skipped in edit mode (parts stay at rest positions).
+func (g *Game) updateMouse(dt float64) {
+	if g.edit.active {
+		g.prevDX = g.sigs.MouseDX
+		g.prevDY = g.sigs.MouseDY
+		return
+	}
+	g.char.UpdateMouse(g.sigs.MouseDX-g.prevDX, g.sigs.MouseDY-g.prevDY, dt)
+	g.prevDX = g.sigs.MouseDX
+	g.prevDY = g.sigs.MouseDY
 }
 
 // pollInput drains the global input backend into ActivitySignals each tick
 // and logs a one-line summary whenever activity was observed.
 func (g *Game) pollInput() {
-	n := g.sigs.Drain(g.input.Signals())
+	n := g.sigs.Drain(g.input.Events())
 	if n > 0 {
 		log.Printf("input: drained %d event(s) this tick — totals key=%d mouse=%d",
 			n, g.sigs.KeyCount, g.sigs.MouseCount)
@@ -138,12 +155,11 @@ func (g *Game) updateActivity() {
 func (g *Game) Draw(screen *ebiten.Image) {
 	cw, ch := g.canvasSize()
 	cx, cy := ebiten.CursorPosition()
-	var lx, ly, tx, ty float64
+	var lx, ly float64
 	if !g.edit.active {
 		lx, ly = lookOffset(cx, cy, cw, ch, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
-		tx, ty = lookOffset(cx, cy, cw, ch, g.cfg.Character.Tracking.MaxX, g.cfg.Character.Tracking.MaxY)
 	}
-	g.char.Draw(screen, lx, ly, tx, ty)
+	g.char.Draw(screen, lx, ly)
 
 	talking := "no"
 	if g.micTalking {

@@ -20,9 +20,9 @@ import (
 const signalBufferSize = 256
 
 // evdevBackend polls keyboard/mouse devices under /dev/input/event* and emits
-// coarse activity signals on a bounded channel.
+// coarse activity events on a bounded channel.
 type evdevBackend struct {
-	signals   chan Signal
+	signals   chan Event
 	devices   []*evdev.InputDevice
 	closed    atomic.Bool
 	closeOnce sync.Once
@@ -40,7 +40,7 @@ func NewBackend() Backend {
 		paths = nil
 	}
 
-	b := &evdevBackend{signals: make(chan Signal, signalBufferSize)}
+	b := &evdevBackend{signals: make(chan Event, signalBufferSize)}
 	sawPermissionError := false
 
 	for _, p := range paths {
@@ -109,24 +109,43 @@ func (b *evdevBackend) poll(dev *evdev.InputDevice) {
 			continue
 		}
 		for _, e := range events {
-			sig, ok := classify(e)
+			ev, ok := eventFrom(e)
 			if !ok {
 				continue
 			}
-			b.emit(sig)
+			b.emit(ev)
 		}
 	}
 }
 
-// emit pushes a signal into the bounded channel, dropping it when full.
-func (b *evdevBackend) emit(sig Signal) {
+// eventFrom converts one evdev event into an input Event, carrying relative
+// pointer motion for EV_REL motion events.
+func eventFrom(e evdev.InputEvent) (Event, bool) {
+	sig, ok := classify(e)
+	if !ok {
+		return Event{}, false
+	}
+	ev := Event{Signal: sig}
+	if e.Type == evdev.EV_REL {
+		switch e.Code {
+		case evdev.REL_X:
+			ev.DX = e.Value
+		case evdev.REL_Y:
+			ev.DY = e.Value
+		}
+	}
+	return ev, true
+}
+
+// emit pushes an event into the bounded channel, dropping it when full.
+func (b *evdevBackend) emit(ev Event) {
 	select {
-	case b.signals <- sig:
+	case b.signals <- ev:
 	default:
 	}
 }
 
-func (b *evdevBackend) Signals() <-chan Signal { return b.signals }
+func (b *evdevBackend) Events() <-chan Event { return b.signals }
 
 func (b *evdevBackend) Close() {
 	b.closeOnce.Do(func() {
