@@ -69,7 +69,7 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 	}
 	out := buildManifest(nodes, "test")
 	for _, want := range []string{
-		`parts_order = ["desk", "body", "eye", "eyelid", "keyboard", "mouse_dev", "mouse", "left"]`,
+		`parts_order = ["body", "eye", "eyelid", "desk", "keyboard", "mouse_dev", "mouse", "left"]`,
 		`desk     = ["desk_1.png"]`,
 		`keyboard = ["keyboard_1.png"]`,
 		`mouse_dev = ["mouse_1.png"]`,
@@ -128,7 +128,7 @@ func TestBuildManifestPartOrder(t *testing.T) {
 		{Name: "Eyelid", Type: "Sprite2D", Pos: []float64{0, 0}, ZIndex: 1, Texture: "res://lid.png", TexSize: []int{10, 10}},
 	}
 	out := buildManifest(nodes, "test")
-	want := `parts_order = ["desk", "body", "head", "eye", "eyelid", "keyboard", "mouse_dev", "left"]`
+	want := `parts_order = ["body", "head", "eye", "eyelid", "desk", "keyboard", "mouse_dev", "left"]`
 	if !strings.Contains(out, want) {
 		t.Errorf("parts_order mismatch, got:\n%s", out)
 	}

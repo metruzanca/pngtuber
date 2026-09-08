@@ -4,7 +4,7 @@
 
 [character]
 skin = "placeholder"
-parts_order = ["desk", "body", "head", "eye", "eyelid", "mouth", "keyboard", "mouse_dev", "mouse", "right", "left"]
+parts_order = ["body", "head", "eye", "eyelid", "mouth", "desk", "keyboard", "mouse_dev", "mouse", "right", "left"]
 
 [character.parts]
 desk      = ["desk.png"]

@@ -200,10 +200,10 @@ func buildManifest(nodes []node, skin string) string {
 		}
 	}
 
-	// parts_order: deliberate layering — desk environment at the back, then
-	// the character, then the keyboard/mouse device in front of the character,
+	// parts_order: deliberate layering — the character first, then the desk (which
+	// covers the body's cut-off), then the keyboard/mouse device on the desk,
 	// then the hands on top of the input devices.
-	prefOrder := []string{"desk", "body", "head", "eye", "eyelid", "mouth", "keyboard", "mouse_dev", "mouse", "right", "left"}
+	prefOrder := []string{"body", "head", "eye", "eyelid", "mouth", "desk", "keyboard", "mouse_dev", "mouse", "right", "left"}
 	order := make([]string, 0, len(parts))
 	seen := map[string]bool{}
 	for _, p := range prefOrder {

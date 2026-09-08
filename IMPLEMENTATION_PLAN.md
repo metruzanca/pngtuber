@@ -529,6 +529,11 @@ tracks a live `mouthOn` flag set from the **raw mic-threshold crossing** (`SetTa
 threshold)`), so the lip flap starts as soon as audio is at/above the threshold and stops the
 instant it drops below — no hysteresis or state-machine hold for the mouth.
 
+**Layer order:** the desk moved **above the body** in `parts_order`
+(`body → head → eye → eyelid → mouth → desk → keyboard → mouse_dev → mouse → right → left`) so the
+desk covers the body's bottom cut-off, with the keyboard/mouse and hands layered on top of it. Tool
+emission + placeholder + skins updated.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the
