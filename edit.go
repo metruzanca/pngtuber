@@ -16,9 +16,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/charmbracelet/log"
 	"image"
 	"image/color"
-	"log"
 	"os"
 	"strings"
 
@@ -48,7 +48,7 @@ func (g *Game) handleEdit() {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		if err := g.saveOffsets(); err != nil {
-			log.Printf("edit: save failed: %v", err)
+			log.Warnf("edit: save failed: %v", err)
 		}
 		return
 	}
@@ -71,7 +71,7 @@ func (g *Game) handleEdit() {
 				for _, p := range g.edit.dragParts {
 					g.edit.baseOffsets[p] = cloneOffsets(g.char.rig.offsets[p])
 				}
-				log.Printf("edit: dragging %s (+%d linked)", part, len(g.edit.dragParts)-1)
+				log.Infof("edit: dragging %s (+%d linked)", part, len(g.edit.dragParts)-1)
 			}
 		}
 		if g.edit.dragging != "" {
@@ -96,13 +96,13 @@ func (g *Game) setEditMode(on bool) {
 	g.edit.baseOffsets = nil
 	g.char.SetSteady(on)
 	if on {
-		log.Printf("edit: mode on — drag parts with the mouse, S to save offsets, Esc to exit")
+		log.Infof("edit: mode on — drag parts with the mouse, S to save offsets, Esc to exit")
 		return
 	}
 	if err := g.saveOffsets(); err != nil {
-		log.Printf("edit: exit save failed: %v", err)
+		log.Warnf("edit: exit save failed: %v", err)
 	} else {
-		log.Printf("edit: mode off — offsets saved")
+		log.Infof("edit: mode off — offsets saved")
 	}
 }
 
@@ -115,7 +115,7 @@ func (g *Game) saveOffsets() error {
 	if err := writeOffsets(g.manifestPath, g.char.rig.order, g.char.rig.offsets); err != nil {
 		return err
 	}
-	log.Printf("edit: saved offsets to %s", g.manifestPath)
+	log.Infof("edit: saved offsets to %s", g.manifestPath)
 	return nil
 }
 

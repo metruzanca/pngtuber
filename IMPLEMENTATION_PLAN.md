@@ -516,9 +516,12 @@ hands relocate to/from the keyboard in half the time. Tool emits both; skins + p
 regenerated.
 
 **Log/overlay quieting:** the in-window status display (state + k/m counters + mic) and the verbose
-console logs (`input: drained …`, the 2s `mic: level=…` heartbeat) are now **off by default** and
-gated behind a `--debug` flag. Startup lines (assets, input devices, mic recording) and activity
-state transitions still log normally, so the console stays readable during normal use.
+console logs (`input: drained …`, the 2s `mic: level=…` heartbeat, **and activity state
+transitions**) are now **off by default** and gated behind a `--debug` flag (which both shows the
+overlay and raises the log level to Debug). Logging moved from the stdlib `log` to
+`charmbracelet/log`: startup lines are `INFO`, warnings (`WARN`, colored yellow), and verbose lines
+`DEBU` — colors render when stderr is a terminal. Startup lines (assets, input devices, mic
+recording) still log normally, so the console stays readable during normal use.
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`

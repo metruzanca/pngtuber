@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"github.com/charmbracelet/log"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -44,7 +44,7 @@ type Game struct {
 
 func NewGame(assetsFlag, skinFlag string, debug bool) (*Game, error) {
 	res := ResolveAssets(assetsFlag, skinFlag)
-	log.Printf("assets: loading %s", res.Source)
+	log.Infof("assets: loading %s", res.Source)
 	cfg, err := LoadConfig(res.ManifestPath)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func NewGame(assetsFlag, skinFlag string, debug bool) (*Game, error) {
 	g.input = input.NewBackend()
 	g.mic = NewMic()
 	g.act.SetOnChange(func(s ActivityState) {
-		log.Printf("activity: state -> %s", s)
+		log.Debugf("activity: state -> %s", s)
 		g.char.SetState(s)
 	})
 	return g, nil
@@ -112,17 +112,17 @@ func (g *Game) updateMouse(dt float64) {
 }
 
 // pollInput drains the global input backend into ActivitySignals each tick.
-// The per-tick summary is verbose, so it is only logged in debug mode.
+// The per-tick summary is verbose, so it is logged at Debug level (--debug).
 func (g *Game) pollInput() {
 	n := g.sigs.Drain(g.input.Events())
-	if g.debug && n > 0 {
-		log.Printf("input: drained %d event(s) this tick — totals key=%d mouse=%d",
+	if n > 0 {
+		log.Debugf("input: drained %d event(s) this tick — totals key=%d mouse=%d",
 			n, g.sigs.KeyCount, g.sigs.MouseCount)
 	}
 }
 
-// updateMic samples the smoothed loudness into the game state, logs talking
-// state transitions and a throttled periodic level.
+// updateMic samples the smoothed loudness into the game state, logging talking
+// state transitions and a throttled periodic level (Debug level for --debug).
 func (g *Game) updateMic() {
 	if g.mic == nil {
 		return
@@ -130,12 +130,12 @@ func (g *Game) updateMic() {
 	g.micLevel = g.mic.Level()
 	talking := g.mic.Talking(g.cfg.Activity.MicThreshold, g.cfg.Activity.MicHysteresis)
 	if talking != g.micTalking {
-		log.Printf("mic: talking=%v level=%.3f (threshold=%.2f)",
+		log.Debugf("mic: talking=%v level=%.3f (threshold=%.2f)",
 			talking, g.micLevel, g.cfg.Activity.MicThreshold)
 	}
 	g.micTalking = talking
-	if g.debug && time.Since(g.lastMicLog) >= 2*time.Second {
-		log.Printf("mic: level=%.3f talking=%v", g.micLevel, talking)
+	if time.Since(g.lastMicLog) >= 2*time.Second {
+		log.Debugf("mic: level=%.3f talking=%v", g.micLevel, talking)
 		g.lastMicLog = time.Now()
 	}
 }
@@ -194,6 +194,10 @@ func main() {
 	skinFlag := flag.String("skin", "", "skin name under <assets>/skins (overrides PNGTUBER_SKIN)")
 	debugFlag := flag.Bool("debug", false, "show the in-window status overlay and verbose input/mic logs")
 	flag.Parse()
+
+	if *debugFlag {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	g, err := NewGame(*assetsFlag, *skinFlag, *debugFlag)
 	if err != nil {

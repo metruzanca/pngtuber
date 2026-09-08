@@ -15,7 +15,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"github.com/charmbracelet/log"
 	"os"
 	"path/filepath"
 )
@@ -62,12 +62,12 @@ func ResolveAssets(assetsFlag, skinFlag string) AssetDirs {
 			}
 		}
 		if skin != "" {
-			log.Printf("assets: skin %q not found under %s; falling back to placeholder", skin, assetsDir)
+			log.Warnf("assets: skin %q not found under %s; falling back to placeholder", skin, assetsDir)
 		} else {
-			log.Printf("assets: no manifest at %s; falling back to placeholder", candidate)
+			log.Warnf("assets: no manifest at %s; falling back to placeholder", candidate)
 		}
 	}
-	log.Printf("assets: using placeholder at %s", placeholderManifest)
+	log.Infof("assets: using placeholder at %s", placeholderManifest)
 	return AssetDirs{ManifestPath: placeholderManifest, BaseDir: filepath.Dir(placeholderManifest), Source: "placeholder"}
 }
 

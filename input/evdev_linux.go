@@ -4,8 +4,8 @@ package input
 
 import (
 	"errors"
+	"github.com/charmbracelet/log"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -49,7 +49,7 @@ func NewBackend() Backend {
 			if errors.Is(err, os.ErrPermission) {
 				sawPermissionError = true
 			}
-			log.Printf("input: skip %s: %v", p, err)
+			log.Warnf("input: skip %s: %v", p, err)
 			continue
 		}
 		if !deviceRelevant(dev) {
@@ -62,11 +62,11 @@ func NewBackend() Backend {
 	if len(b.devices) == 0 {
 		switch {
 		case len(paths) == 0:
-			log.Printf("input: no /dev/input/event* devices found; input monitoring disabled (running mic-only)")
+			log.Warnf("input: no /dev/input/event* devices found; input monitoring disabled (running mic-only)")
 		case sawPermissionError:
-			log.Printf("input: cannot read /dev/input/event* (permission denied). Add your user to the input group and re-login, then restart: sudo usermod -aG input $USER")
+			log.Warnf("input: cannot read /dev/input/event* (permission denied). Add your user to the input group and re-login, then restart: sudo usermod -aG input $USER")
 		default:
-			log.Printf("input: no keyboard/mouse devices found; input monitoring disabled (running mic-only)")
+			log.Warnf("input: no keyboard/mouse devices found; input monitoring disabled (running mic-only)")
 		}
 		return NewNone()
 	}
@@ -74,7 +74,7 @@ func NewBackend() Backend {
 	for _, dev := range b.devices {
 		go b.poll(dev)
 	}
-	log.Printf("input: monitoring %d device(s)", len(b.devices))
+	log.Infof("input: monitoring %d device(s)", len(b.devices))
 	return b
 }
 
@@ -102,7 +102,7 @@ func (b *evdevBackend) poll(dev *evdev.InputDevice) {
 			}
 			if errors.Is(err, syscall.ENODEV) || errors.Is(err, syscall.EBADF) ||
 				errors.Is(err, fs.ErrClosed) || errors.Is(err, os.ErrClosed) {
-				log.Printf("input: device %s gone (%v); stopped monitoring it", name, err)
+				log.Warnf("input: device %s gone (%v); stopped monitoring it", name, err)
 				return
 			}
 			// Transient errors (EINTR etc.); keep polling.

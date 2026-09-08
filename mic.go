@@ -11,7 +11,7 @@
 package main
 
 import (
-	"log"
+	"github.com/charmbracelet/log"
 	"math"
 	"sync/atomic"
 	"time"
@@ -50,20 +50,20 @@ type Mic struct {
 func NewMic() *Mic {
 	client, err := pulse.NewClient(pulse.ClientTimeout(2 * time.Second))
 	if err != nil {
-		log.Printf("mic: cannot connect to PulseAudio/PipeWire (%v); running without mic. Start pulseaudio/pipewire to enable voice activity", err)
+		log.Warnf("mic: cannot connect to PulseAudio/PipeWire (%v); running without mic. Start pulseaudio/pipewire to enable voice activity", err)
 		return nil
 	}
 
 	m := &Mic{client: client}
 	stream, err := client.NewRecord(pulse.Int16Writer(m.onAudio), pulse.RecordLatency(0.05))
 	if err != nil {
-		log.Printf("mic: cannot open record stream (%v); running without mic", err)
+		log.Warnf("mic: cannot open record stream (%v); running without mic", err)
 		client.Close()
 		return nil
 	}
 	m.stream = stream
 	stream.Start()
-	log.Printf("mic: recording from default source (rate=%d channels=%d)", stream.SampleRate(), stream.Channels())
+	log.Infof("mic: recording from default source (rate=%d channels=%d)", stream.SampleRate(), stream.Channels())
 	return m
 }
 

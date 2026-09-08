@@ -44,7 +44,8 @@ build with cgo enabled (default).
 
 The window is **transparent, undecorated, and not floating**, sized to the loaded skin. Press `Esc`
 to quit. Run with `--debug` to show the in-window status overlay (state + input/mic counters) and
-verbose input/mic console logs; by default the console only logs startup and state transitions.
+verbose (state-transition + input/mic) console logs; by default the console only logs startup lines
+and warnings, colorized via charmbracelet/log when run in a terminal.
 
 ## OBS capture
 
