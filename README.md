@@ -8,11 +8,17 @@ and mirrors your behavior. Capture it as a stream element in OBS.
 capture + talking detection, the activity state machine, the rig character (state→variant parts,
 elapsed-time animation, cursor tracking), a fully data-driven manifest, the asset data-dir pipeline
 (scene-derived skins from a user-owned BitBuddy copy), and multi-skin selection. The character sits
-at a desk with keyboard + mouse: body/head breathe, typing presses both hands, the mouse hand tracks
-the real cursor, gaming uses mouse + keyboard together, and hand changes are debounced so the
+at a desk with keyboard + mouse: body/head breathe, hands tap up/down per keystroke, the mouse hand
+tracks the real cursor, gaming uses mouse + keyboard together, and hand changes are debounced so the
 character doesn't flicker between mouse and keyboard. See
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap and
 [docs/bitbuddy-assets.md](docs/bitbuddy-assets.md) for installing real skins.
+
+## Rig edit mode
+
+Press **F2** to toggle a rig editor: drag any part with the mouse to reposition it, press **S** to
+save the offsets back into the loaded `manifest.toml`, and **Esc** to exit. All of a part's variants
+shift together. The head/eyes do not track the cursor by default (see `[character.look] parts`).
 
 ## Building
 

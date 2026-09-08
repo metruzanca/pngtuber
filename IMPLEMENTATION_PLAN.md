@@ -465,6 +465,18 @@ flicker, instant sleep/wake, instant mouth, variant mapping, desk emission), hea
 composite pixel checks (desk renders, hands switch between idle/typing/mouse), and live runs —
 alien_cat 320×251, frog 320×234.
 
+**Edit mode + polish (follow-up):** added an interactive rig editor (`edit.go`). **F2** toggles it;
+drag any part with the mouse to reposition (all its variants shift together); **S** saves the
+offsets back into the loaded `manifest.toml` by rewriting only the `[character.offsets]` section
+(byte-identical round-trip, comments preserved); **Esc** exits. The head/eyes no longer follow the
+cursor by default — `[character.look]` gained a `parts` list (default empty; re-enable per part).
+Hands now **tap up/down per keystroke** via a `press` animation
+(`[character.animations] press = { parts=["left","right"], duration_secs=0.1, variant=1 }`,
+alternating hands), instead of holding a static down pose while typing; the static
+`left/right = {typing:1}` variant mapping was removed. Verified: unit tests (offset-save round-trip
+incl. reload, hit-test, drag shift, press alternation + decay, look-parts config), headless
+composite per state, and live edit-mode smoke tests (toggle, drag grab, save, exit).
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

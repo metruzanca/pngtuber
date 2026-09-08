@@ -36,10 +36,12 @@ type Offset struct {
 	Y int `toml:"y"`
 }
 
-// LookConfig caps how far the head/eye parts track the cursor (px each axis).
+// LookConfig caps how far the listed parts track the cursor (px each axis).
+// Parts is empty by default so the character (head/eyes) stays fixed.
 type LookConfig struct {
-	MaxX float64 `toml:"max_x"`
-	MaxY float64 `toml:"max_y"`
+	Parts []string `toml:"parts"`
+	MaxX  float64  `toml:"max_x"`
+	MaxY  float64  `toml:"max_y"`
 }
 
 // TrackingConfig makes parts follow the cursor (e.g. the hand on the mouse),
@@ -56,6 +58,9 @@ type TrackingConfig struct {
 type AnimationsConfig struct {
 	Mouth MouthAnimConfig `toml:"mouth"`
 	Blink BlinkAnimConfig `toml:"blink"`
+	// Press taps parts (e.g. keyboard hands) down for a short time on each
+	// key event, so the hands go up and back down as the user types.
+	Press PressAnimConfig `toml:"press"`
 	// Breathing subtly scales parts (body/head) about their centers.
 	Breathing BreathingConfig `toml:"breathing"`
 	// HandMoveDelaySecs debounces hand-layout changes: the hands only relocate
@@ -76,6 +81,14 @@ type BlinkAnimConfig struct {
 	ClosedVariant int     `toml:"closed_variant"`
 	IntervalSecs  float64 `toml:"interval_secs"`
 	DurationSecs  float64 `toml:"duration_secs"`
+}
+
+// PressAnimConfig makes parts tap to a variant (default 1 = "pressing") for
+// a short duration on each key event, alternating across the parts.
+type PressAnimConfig struct {
+	Parts        []string `toml:"parts"`
+	DurationSecs float64  `toml:"duration_secs"`
+	Variant      int      `toml:"variant"`
 }
 
 // BreathingConfig scales a set of parts about their centers.

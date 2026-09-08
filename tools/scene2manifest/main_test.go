@@ -73,12 +73,17 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 		`[character.tracking]`,
 		`hand_move_delay_secs = 1.0`,
 		`breathing = { parts = ["body", "head"]`,
-		`left   = { typing = 1, gaming = 1 }`,
+		`press = { parts = ["left", "right"], duration_secs = 0.1, variant = 1 }`,
 		`mouse  = { mouse = 1, gaming = 1 }`,
+		"[character.look]\nparts = []",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
+	}
+	// left/right are not statically "down" while typing; presses drive them.
+	if strings.Contains(out, "left   = { typing") || strings.Contains(out, "right  = { typing") {
+		t.Errorf("left/right should not have a static typing mapping:\n%s", out)
 	}
 }
 

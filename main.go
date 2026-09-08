@@ -21,12 +21,14 @@ const (
 // the rig character; Milestone 6 made the manifest fully data-driven; M7 loads
 // the manifest from a user data dir (env/flag/XDG) or the placeholder.
 type Game struct {
-	cfg   *Config
-	char  *Character
-	input input.Backend
-	sigs  input.ActivitySignals
-	mic   *Mic
-	act   *Activity
+	cfg          *Config
+	char         *Character
+	input        input.Backend
+	sigs         input.ActivitySignals
+	mic          *Mic
+	act          *Activity
+	manifestPath string
+	edit         editState
 
 	micLevel   float64
 	micTalking bool
@@ -52,10 +54,11 @@ func NewGame(assetsFlag, skinFlag string) (*Game, error) {
 
 	now := time.Now()
 	g := &Game{
-		cfg:       cfg,
-		char:      NewCharacter(rig, cfg.Character),
-		act:       NewActivity(cfg.Activity, now),
-		lastFrame: now,
+		cfg:          cfg,
+		char:         NewCharacter(rig, cfg.Character),
+		act:          NewActivity(cfg.Activity, now),
+		manifestPath: res.ManifestPath,
+		lastFrame:    now,
 	}
 	g.input = input.NewBackend()
 	g.mic = NewMic()
@@ -71,9 +74,15 @@ func (g *Game) Update() error {
 	dt := now.Sub(g.lastFrame).Seconds()
 	g.lastFrame = now
 
-	// Debug: Esc quits.
+	g.handleEdit()
+
+	// Esc: exit edit mode first, then quit.
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
-		return ebiten.Termination
+		if g.edit.active {
+			g.setEditMode(false)
+		} else {
+			return ebiten.Termination
+		}
 	}
 
 	g.pollInput()
@@ -114,7 +123,8 @@ func (g *Game) updateMic() {
 
 // updateActivity feeds this tick's per-tick key/mouse deltas plus the mic
 // talking state into the state machine. Transitions are logged and forwarded
-// to the character via the callback registered in NewGame.
+// to the character via the callback registered in NewGame; key events also
+// drive the character's press animation.
 func (g *Game) updateActivity() {
 	now := time.Now()
 	dk := g.sigs.KeyCount - g.prevKey
@@ -122,13 +132,17 @@ func (g *Game) updateActivity() {
 	g.prevKey = g.sigs.KeyCount
 	g.prevMouse = g.sigs.MouseCount
 	g.state = g.act.Tick(now, dk, dm, g.micTalking)
+	g.char.Press(dk)
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	cw, ch := g.canvasSize()
 	cx, cy := ebiten.CursorPosition()
-	lx, ly := lookOffset(cx, cy, cw, ch, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
-	tx, ty := lookOffset(cx, cy, cw, ch, g.cfg.Character.Tracking.MaxX, g.cfg.Character.Tracking.MaxY)
+	var lx, ly, tx, ty float64
+	if !g.edit.active {
+		lx, ly = lookOffset(cx, cy, cw, ch, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
+		tx, ty = lookOffset(cx, cy, cw, ch, g.cfg.Character.Tracking.MaxX, g.cfg.Character.Tracking.MaxY)
+	}
 	g.char.Draw(screen, lx, ly, tx, ty)
 
 	talking := "no"
@@ -137,6 +151,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("%-6s k=%d m=%d mic=%.2f talk=%s",
 		g.state, g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
+	if g.edit.active {
+		g.drawEditOverlay(screen)
+	}
 }
 
 // canvasSize returns the rig's composition canvas, falling back to the fixed

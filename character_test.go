@@ -18,6 +18,7 @@ func testConfig() CharacterConfig {
 		},
 		Animations: AnimationsConfig{
 			Mouth:             MouthAnimConfig{Part: "mouth", FPS: 10},
+			Press:             PressAnimConfig{Parts: []string{"left", "right"}, DurationSecs: 0.1, Variant: 1},
 			Blink:             BlinkAnimConfig{Part: "eyelid", ClosedVariant: 1, IntervalSecs: 3.0, DurationSecs: 0.15},
 			Breathing:         BreathingConfig{Parts: []string{"body", "head"}, PeriodSecs: 4.0, Amplitude: 0.015},
 			HandMoveDelaySecs: 1.0,

@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	_ "image/png"
 	"math"
 	"path/filepath"
@@ -134,6 +135,7 @@ type Character struct {
 	variants map[string]map[string]int
 	anim     AnimationsConfig
 	tracking TrackingConfig
+	look     LookConfig
 	mouth    frameLoop
 
 	handTimer   float64
@@ -141,6 +143,11 @@ type Character struct {
 	timeToBlink float64
 	blinkT      float64
 	blinking    bool
+
+	// press animation state
+	pressIndex int
+	pressTimer map[string]float64
+	steady     bool // edit mode: pause breathing for stable dragging
 }
 
 // NewCharacter creates a Character in the Idle state, driven by the manifest's
@@ -151,13 +158,15 @@ func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
 		mouthFPS = 10
 	}
 	c := &Character{
-		rig:      rig,
-		raw:      Idle,
-		hands:    Idle,
-		variants: cc.Variants,
-		anim:     cc.Animations,
-		tracking: cc.Tracking,
-		mouth:    frameLoop{fps: mouthFPS, nframes: len(rig.parts[cc.Animations.Mouth.Part])},
+		rig:        rig,
+		raw:        Idle,
+		hands:      Idle,
+		variants:   cc.Variants,
+		anim:       cc.Animations,
+		tracking:   cc.Tracking,
+		look:       cc.Look,
+		pressTimer: map[string]float64{},
+		mouth:      frameLoop{fps: mouthFPS, nframes: len(rig.parts[cc.Animations.Mouth.Part])},
 	}
 	if c.anim.Blink.IntervalSecs <= 0 {
 		c.anim.Blink.IntervalSecs = 3.0
@@ -165,8 +174,35 @@ func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
 	if c.anim.Blink.DurationSecs <= 0 {
 		c.anim.Blink.DurationSecs = 0.15
 	}
+	if c.anim.Press.DurationSecs <= 0 {
+		c.anim.Press.DurationSecs = 0.1
+	}
+	if c.anim.Press.Variant <= 0 {
+		c.anim.Press.Variant = 1
+	}
 	c.timeToBlink = c.anim.Blink.IntervalSecs
 	return c
+}
+
+// SetSteady pauses transient animations (breathing) for edit mode so parts can
+// be dragged at their true positions.
+func (c *Character) SetSteady(steady bool) { c.steady = steady }
+
+// Press records key events: each one taps the next press part (alternating)
+// down for press.duration_secs.
+func (c *Character) Press(keys int) {
+	if keys <= 0 || len(c.anim.Press.Parts) == 0 {
+		return
+	}
+	const maxPerTick = 8
+	if keys > maxPerTick {
+		keys = maxPerTick
+	}
+	for i := 0; i < keys; i++ {
+		c.pressIndex = (c.pressIndex + 1) % len(c.anim.Press.Parts)
+		part := c.anim.Press.Parts[c.pressIndex]
+		c.pressTimer[part] = c.anim.Press.DurationSecs
+	}
 }
 
 // SetState records the activity machine's current state. The committed hand
@@ -182,7 +218,7 @@ func (c *Character) SetState(s ActivityState) {
 // Update advances the animation clocks by dt seconds (real elapsed time).
 func (c *Character) Update(dt float64) {
 	c.mouth.update(dt)
-	if c.anim.Breathing.PeriodSecs > 0 {
+	if !c.steady && c.anim.Breathing.PeriodSecs > 0 {
 		c.breathPhase += dt
 	}
 
@@ -203,6 +239,16 @@ func (c *Character) Update(dt float64) {
 		c.handTimer = 0
 	}
 
+	// Decay press timers.
+	for part, t := range c.pressTimer {
+		t -= dt
+		if t <= 0 {
+			delete(c.pressTimer, part)
+		} else {
+			c.pressTimer[part] = t
+		}
+	}
+
 	if c.anim.Blink.Part == "" || c.raw == Sleep {
 		// No blink configured, or asleep (eyelid forced closed via variants).
 		return
@@ -220,11 +266,14 @@ func (c *Character) Update(dt float64) {
 }
 
 // variantIndex returns which variant image of a part to show. Resolution
-// order: the manifest's per-state [character.variants] mapping against the
-// committed hand state (raw state for the mouth and eyelid parts), then the
-// dynamic behaviors (mouth talk animation, blink). Variant 0 is the
-// default/calm variant for every part.
+// order: the press animation (hands tapping), then the manifest's per-state
+// [character.variants] mapping against the committed hand state (raw state for
+// the mouth and eyelid parts), then the dynamic behaviors (mouth talk
+// animation, blink). Variant 0 is the default/calm variant for every part.
 func (c *Character) variantIndex(part string) int {
+	if c.pressTimer[part] > 0 {
+		return c.anim.Press.Variant
+	}
 	if part == c.anim.Mouth.Part && c.raw == Talking {
 		return c.mouth.index()
 	}
@@ -243,10 +292,52 @@ func (c *Character) variantIndex(part string) int {
 	return 0
 }
 
+// partRect returns the drawn rectangle (top-left origin) of a part's current
+// variant, or ok=false if the part has no visible image.
+func (c *Character) partRect(part string) (image.Rectangle, bool) {
+	imgs := c.rig.parts[part]
+	if len(imgs) == 0 {
+		return image.Rectangle{}, false
+	}
+	idx := c.variantIndex(part)
+	if idx < 0 || idx >= len(imgs) || imgs[idx] == nil {
+		return image.Rectangle{}, false
+	}
+	offs := c.rig.offsets[part]
+	if len(offs) == 0 {
+		return image.Rectangle{}, false
+	}
+	off := offs[0]
+	if idx < len(offs) {
+		off = offs[idx]
+	}
+	b := imgs[idx].Bounds()
+	return image.Rect(off.X, off.Y, off.X+b.Dx(), off.Y+b.Dy()), true
+}
+
+// HitPart returns the top-most part under (x, y), in draw order.
+func (c *Character) HitPart(x, y int) (string, bool) {
+	for i := len(c.rig.order) - 1; i >= 0; i-- {
+		part := c.rig.order[i]
+		if r, ok := c.partRect(part); ok && x >= r.Min.X && x < r.Max.X && y >= r.Min.Y && y < r.Max.Y {
+			return part, true
+		}
+	}
+	return "", false
+}
+
+// ShiftPart moves every variant of a part by (dx, dy).
+func (c *Character) ShiftPart(part string, dx, dy int) {
+	for i := range c.rig.offsets[part] {
+		c.rig.offsets[part][i].X += dx
+		c.rig.offsets[part][i].Y += dy
+	}
+}
+
 // Draw composes the parts in manifest order with their offsets, applying the
-// cursor look offset to the head and eye parts, the breathing scale, and the
-// mouse tracking offset to tracked parts while the mouse is active. Hidden
-// variants (nil) are skipped.
+// cursor look offset to configured parts, the breathing scale, and the mouse
+// tracking offset to tracked parts while the mouse is active. Hidden variants
+// (nil) are skipped.
 func (c *Character) Draw(screen *ebiten.Image, lookX, lookY, trackX, trackY float64) {
 	breathe := map[string]bool{}
 	for _, p := range c.anim.Breathing.Parts {
@@ -255,6 +346,10 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY, trackX, trackY floa
 	track := map[string]bool{}
 	for _, p := range c.tracking.Parts {
 		track[p] = true
+	}
+	look := map[string]bool{}
+	for _, p := range c.look.Parts {
+		look[p] = true
 	}
 	mouseActive := c.hands == Mouse || c.hands == Gaming
 
@@ -281,14 +376,14 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY, trackX, trackY floa
 
 		op := &ebiten.DrawImageOptions{}
 		w, h := imgs[idx].Bounds().Dx(), imgs[idx].Bounds().Dy()
-		if breathe[part] && c.anim.Breathing.PeriodSecs > 0 {
+		if breathe[part] && !c.steady && c.anim.Breathing.PeriodSecs > 0 {
 			scale := 1 + c.anim.Breathing.Amplitude*math.Sin(2*math.Pi*c.breathPhase/c.anim.Breathing.PeriodSecs)
 			op.GeoM.Translate(-float64(w)/2, -float64(h)/2)
 			op.GeoM.Scale(scale, scale)
 			op.GeoM.Translate(float64(w)/2, float64(h)/2)
 		}
 		lx, ly := 0.0, 0.0
-		if part == "head" || part == "eye" {
+		if look[part] {
 			lx, ly = lookX, lookY
 		}
 		tx, ty := 0.0, 0.0
