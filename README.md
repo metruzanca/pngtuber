@@ -4,11 +4,12 @@ An open-source, cross-platform (Linux-first) **input-reactive desktop avatar**. 
 transparent, animated character that observes your computer activity (keyboard, mouse, microphone)
 and mirrors your behavior. Capture it as a stream element in OBS.
 
-**Status: Milestones 1–5 done** — transparent undecorated window, global input pipeline
-(evdev → activity counters), mic capture (pulse → smoothed loudness + talking detection with
-hysteresis), the activity state machine (Talking/Gaming/Typing/Mouse with idle/sleep timers), and
-the rig character that switches parts per state (hands/mouth/eyelid), loops animated variants, and
-tracks the cursor. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full roadmap.
+**Status: Milestones 1–7 done** — transparent undecorated window, global input pipeline, mic
+capture + talking detection, the activity state machine, the rig character (state→variant parts,
+elapsed-time animation, cursor tracking), a fully data-driven manifest, and the asset data-dir
+pipeline (scene-derived skins installed from a user-owned BitBuddy copy). See
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap and
+[docs/bitbuddy-assets.md](docs/bitbuddy-assets.md) for installing real skins.
 
 ## Building
 
@@ -55,5 +56,17 @@ PulseAudio or PipeWire (Pulse-compatible) server — the default on most desktop
 
 ## Configuration
 
-`assets/character/manifest.toml` maps activity states to sprite-sheet frame ranges and fps, plus
-activity timings/thresholds. Editing it changes behavior without recompiling.
+Everything is data-driven: a `manifest.toml` defines the rig (parts, scene-derived offsets,
+z-order, per-state variant mapping, animations, cursor look) plus activity timings/thresholds.
+Editing it changes behavior without recompiling.
+
+Assets resolve in this order:
+
+1. `PNGTUBER_ASSETS` env var or `--assets` flag
+2. `$XDG_DATA_HOME/pngtuber/assets` (default `~/.local/share/pngtuber/assets`)
+3. The committed placeholder (`assets/character/manifest.toml`), with a log line when used
+
+Within the assets dir a skin lives at `skins/<skin>/manifest.toml` and is chosen with
+`PNGTUBER_SKIN` or `--skin` (e.g. `pngtuber --skin alien_cat`). See
+[docs/bitbuddy-assets.md](docs/bitbuddy-assets.md) for installing real BitBuddy skins; the window
+auto-sizes to the skin's rig.

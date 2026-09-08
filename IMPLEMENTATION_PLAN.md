@@ -39,7 +39,7 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 - [x] Milestone 4: Activity state machine
 - [x] Milestone 5: Character animation
 - [x] Milestone 6: Config manifest
-- [ ] Milestone 7: Asset data dir + first skin
+- [x] Milestone 7: Asset data dir + first skin
 - [ ] Milestone 8: Asset integration (more skins)
 
 ### Non-Goals (current phase)
@@ -290,7 +290,7 @@ from the scene**, not guessed.
 | 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ✅ |
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ✅ |
 | 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ✅ |
-| 7 | Asset data dir + first skin | `assets.go` resolution, scene→manifest tool (§5.8), `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS with offsets derived from `coworker_1036.scn` | ☐ |
+| 7 | Asset data dir + first skin | `assets.go` resolution, scene→manifest tool (§5.8), `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS with offsets derived from `coworker_1036.scn` | ✅ |
 | 8 | Asset integration (more skins) | Real rigs wired in for other skins as desired | Skin selection + per-skin parts/offsets work without code changes | ☐ |
 
 ### Suggested order rationale
@@ -422,6 +422,22 @@ the dynamic mouth/blink behaviors (both optional). Parts, offsets, z-order, curs
 parameters, and activity thresholds are all data-driven: editing `manifest.toml` changes behavior
 without recompiling. Verified by a dedicated test that rewrites a manifest and confirms the variant
 selection and `idle_after_secs` change at runtime; full suite + vet + build + gofmt clean.
+
+**Milestone 7 (done):** `assets.go` resolves the manifest from `PNGTUBER_ASSETS` → `--assets` →
+`$XDG_DATA_HOME/pngtuber/assets`, with a skin subdir (`skins/<skin>/manifest.toml` via
+`PNGTUBER_SKIN`/`--skin`) and a logged fallback to the committed placeholder. Offsets became
+**per-variant** (`offsets[name] = [{x,y}, …]` matching the parts list) and parts gained a
+`"-"` hidden variant (open eyelid), with `LoadRig` normalizing the rig to the origin and the window
+auto-sizing to the rig's bounding box. Binary-path scene tooling committed per §5.8:
+`tools/extract_pck.sh` (godotpcktool), `tools/dump_scene.gd` (headless Godot dump of the binary
+`coworker_*.scn`), `tools/scene2manifest` (node dump JSON → manifest parts/offsets/variants/
+animations, all scene-derived). `docs/bitbuddy-assets.md` documents the full install flow. The real
+**alien_cat** skin (BitBuddy 4.6.1) was installed to
+`~/.local/share/pngtuber/assets/skins/alien_cat/` and verified: the app loads it (`assets: loading
+user data dir (…/skins/alien_cat/manifest.toml)`), the window auto-sizes to 154×149, and a
+composite check confirmed opaque body/head at the scene-derived offsets. The placeholder still
+works out of the box with a logged fallback. Copyrighted art stays out of the repo — only tooling +
+docs are committed.
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`

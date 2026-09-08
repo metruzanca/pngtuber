@@ -15,14 +15,15 @@ left   = ["left_up.png", "left_down.png"]
 right  = ["right_up.png", "right_down.png"]
 mouth  = ["mouth_1.png", "mouth_2.png", "mouth_3.png"]
 
+# Per-variant offsets: one {x,y} per part variant, in the same order as parts.
 [character.offsets]
-body   = { x = 48,  y = 100 }
-head   = { x = 64,  y = 60 }
-eye    = { x = 84,  y = 76 }
-eyelid = { x = 84,  y = 76 }
-left   = { x = 52,  y = 96 }
-right  = { x = 112, y = 96 }
-mouth  = { x = 84,  y = 100 }
+body   = [{ x = 48,  y = 100 }]
+head   = [{ x = 64,  y = 60 }]
+eye    = [{ x = 84,  y = 76 }]
+eyelid = [{ x = 84,  y = 76 }, { x = 84, y = 76 }]
+left   = [{ x = 52,  y = 96 }, { x = 52, y = 110 }]
+right  = [{ x = 112, y = 96 }, { x = 112, y = 110 }]
+mouth  = [{ x = 84,  y = 100 }, { x = 84, y = 100 }, { x = 84, y = 100 }]
 
 # Per-state variant mapping: part -> state -> variant index. States use the
 # activity names (idle, mouse, typing, gaming, talking, sleep); parts use 0

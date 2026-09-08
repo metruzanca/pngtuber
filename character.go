@@ -46,12 +46,24 @@ func (f *frameLoop) index() int {
 type Rig struct {
 	order   []string
 	parts   map[string][]*ebiten.Image
-	offsets map[string]Offset
+	offsets map[string][]Offset
 	look    LookConfig
+	canvasW int
+	canvasH int
 }
 
+// Canvas returns the composition canvas size in pixels (the rig's bounding
+// box), used to size the window to fit any skin.
+func (r *Rig) Canvas() (int, int) { return r.canvasW, r.canvasH }
+
+// hiddenVariant marks a part variant that is not drawn (e.g. an open eyelid
+// that is only shown when closed).
+const hiddenVariant = "-"
+
 // LoadRig loads every part variant from the manifest, resolving relative
-// filenames against baseDir.
+// filenames against baseDir. The hiddenVariant marker ("-") maps to a nil
+// image that Draw skips. Offsets are normalized so the rig starts at (0,0)
+// and the canvas is sized to the parts' bounding box.
 func LoadRig(cfg *Config, baseDir string) (*Rig, error) {
 	r := &Rig{
 		order:   cfg.Character.PartsOrder,
@@ -61,6 +73,10 @@ func LoadRig(cfg *Config, baseDir string) (*Rig, error) {
 	}
 	for name, files := range cfg.Character.Parts {
 		for _, f := range files {
+			if f == hiddenVariant {
+				r.parts[name] = append(r.parts[name], nil)
+				continue
+			}
 			img, _, err := ebitenutil.NewImageFromFile(filepath.Join(baseDir, f))
 			if err != nil {
 				return nil, fmt.Errorf("load part %q (%s): %w", name, f, err)
@@ -68,7 +84,39 @@ func LoadRig(cfg *Config, baseDir string) (*Rig, error) {
 			r.parts[name] = append(r.parts[name], img)
 		}
 	}
+	r.normalize()
 	return r, nil
+}
+
+// normalize shifts all offsets so the rig starts at (0,0) and computes the
+// canvas size from the parts' bounding box.
+func (r *Rig) normalize() {
+	minX, minY := math.MaxInt, math.MaxInt
+	maxX, maxY := math.MinInt, math.MinInt
+	for name, offs := range r.offsets {
+		for i, off := range offs {
+			imgs := r.parts[name]
+			if i >= len(imgs) || imgs[i] == nil {
+				continue
+			}
+			w, h := imgs[i].Bounds().Dx(), imgs[i].Bounds().Dy()
+			minX = min(minX, off.X)
+			minY = min(minY, off.Y)
+			maxX = max(maxX, off.X+w)
+			maxY = max(maxY, off.Y+h)
+		}
+	}
+	if maxX < minX {
+		return
+	}
+	for name := range r.offsets {
+		for i := range r.offsets[name] {
+			r.offsets[name][i].X -= minX
+			r.offsets[name][i].Y -= minY
+		}
+	}
+	r.canvasW = maxX - minX
+	r.canvasH = maxY - minY
 }
 
 // Character composes the rig parts and switches variants by activity state.
@@ -159,7 +207,8 @@ func (c *Character) variantIndex(part string) int {
 }
 
 // Draw composes the parts in manifest order with their offsets, applying the
-// cursor look offset to the head and eye parts.
+// cursor look offset to the head and eye parts. Hidden variants (nil) are
+// skipped.
 func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 	for _, part := range c.rig.order {
 		imgs := c.rig.parts[part]
@@ -170,13 +219,22 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 		if idx < 0 || idx >= len(imgs) {
 			idx = 0
 		}
-		off := c.rig.offsets[part]
-		op := &ebiten.DrawImageOptions{}
-		lx, ly := 0.0, 0.0
-		if part == "head" || part == "eye" {
-			lx, ly = lookX, lookY
+		if imgs[idx] == nil {
+			continue
 		}
-		op.GeoM.Translate(float64(off.X)+lx, float64(off.Y)+ly)
+		op := &ebiten.DrawImageOptions{}
+		offs := c.rig.offsets[part]
+		if len(offs) > 0 {
+			off := offs[0]
+			if idx < len(offs) {
+				off = offs[idx]
+			}
+			lx, ly := 0.0, 0.0
+			if part == "head" || part == "eye" {
+				lx, ly = lookX, lookY
+			}
+			op.GeoM.Translate(float64(off.X)+lx, float64(off.Y)+ly)
+		}
 		screen.DrawImage(imgs[idx], op)
 	}
 }

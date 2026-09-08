@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
-	"path/filepath"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -16,12 +16,10 @@ const (
 	screenH = 192
 )
 
-// manifestPath is the character manifest; part files resolve relative to it.
-const manifestPath = "assets/character/manifest.toml"
-
 // Game is the top-level Ebitengine game. Milestones 1-4 wired the transparent
-// window, global input, mic, and the activity state machine; Milestone 5 adds
-// the rig character that switches parts per state and tracks the cursor.
+// window, global input, mic, and the activity state machine; Milestone 5 added
+// the rig character; Milestone 6 made the manifest fully data-driven; M7 loads
+// the manifest from a user data dir (env/flag/XDG) or the placeholder.
 type Game struct {
 	cfg   *Config
 	char  *Character
@@ -39,13 +37,15 @@ type Game struct {
 	lastFrame  time.Time
 }
 
-func NewGame() (*Game, error) {
-	cfg, err := LoadConfig(manifestPath)
+func NewGame(assetsFlag, skinFlag string) (*Game, error) {
+	res := ResolveAssets(assetsFlag, skinFlag)
+	log.Printf("assets: loading %s", res.Source)
+	cfg, err := LoadConfig(res.ManifestPath)
 	if err != nil {
 		return nil, err
 	}
 
-	rig, err := LoadRig(cfg, filepath.Dir(manifestPath))
+	rig, err := LoadRig(cfg, res.BaseDir)
 	if err != nil {
 		return nil, err
 	}
@@ -125,31 +125,46 @@ func (g *Game) updateActivity() {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	cw, ch := g.canvasSize()
 	cx, cy := ebiten.CursorPosition()
-	lx, ly := lookOffset(cx, cy, screenW, screenH, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
+	lx, ly := lookOffset(cx, cy, cw, ch, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
 	g.char.Draw(screen, lx, ly)
 
 	talking := "no"
 	if g.micTalking {
 		talking = "YES"
 	}
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("M5: %-6s k=%d m=%d mic=%.2f talk=%s",
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("%-6s k=%d m=%d mic=%.2f talk=%s",
 		g.state, g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
 }
 
-func (g *Game) Layout(outsideW, outsideH int) (int, int) {
+// canvasSize returns the rig's composition canvas, falling back to the fixed
+// default when the manifest has no parts.
+func (g *Game) canvasSize() (int, int) {
+	if w, h := g.char.rig.Canvas(); w > 0 {
+		return w, h
+	}
 	return screenW, screenH
 }
 
+func (g *Game) Layout(outsideW, outsideH int) (int, int) {
+	return g.canvasSize()
+}
+
 func main() {
-	g, err := NewGame()
+	assetsFlag := flag.String("assets", "", "assets directory (overrides PNGTUBER_ASSETS)")
+	skinFlag := flag.String("skin", "", "skin name under <assets>/skins (overrides PNGTUBER_SKIN)")
+	flag.Parse()
+
+	g, err := NewGame(*assetsFlag, *skinFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer g.input.Close()
 	defer g.mic.Close()
 
-	ebiten.SetWindowSize(screenW, screenH)
+	w, h := g.canvasSize()
+	ebiten.SetWindowSize(w, h)
 	ebiten.SetWindowTitle("pngtuber")
 	ebiten.SetWindowDecorated(false)
 	ebiten.SetWindowFloating(false)

@@ -217,7 +217,7 @@ func TestManifestDrivenBehavior(t *testing.T) {
 			"left = [\"up.png\", \"down.png\"]\n" +
 			"[character.variants]\n" + variants + "\n" +
 			"[character.offsets]\n" +
-			"left = { x = 0, y = 0 }\n"
+			"left = [{ x = 0, y = 0 }]\n"
 		path := filepath.Join(dir, "manifest.toml")
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)

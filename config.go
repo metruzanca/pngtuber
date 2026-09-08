@@ -21,13 +21,15 @@ type CharacterConfig struct {
 	Skin       string                    `toml:"skin"`
 	PartsOrder []string                  `toml:"parts_order"`
 	Parts      map[string][]string       `toml:"parts"`
-	Offsets    map[string]Offset         `toml:"offsets"`
+	Offsets    map[string][]Offset       `toml:"offsets"`
 	Look       LookConfig                `toml:"look"`
 	Variants   map[string]map[string]int `toml:"variants"`
 	Animations AnimationsConfig          `toml:"animations"`
 }
 
-// Offset is a part's position in the composition canvas (top-left origin).
+// Offset is a part variant's position in the composition canvas (top-left
+// origin). Offsets are per-variant: offsets["left"] has one entry per entry in
+// parts["left"]; a shorter list falls back to the first entry.
 type Offset struct {
 	X int `toml:"x"`
 	Y int `toml:"y"`
