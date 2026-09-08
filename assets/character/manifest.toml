@@ -1,18 +1,32 @@
 # pngtuber character manifest.
 # Editing this file changes behavior without recompiling.
-# Milestone 1: only the character block is used (placeholder sheet).
+# Placeholder rig (generated shapes) until a real skin is installed (Milestone 7).
 
 [character]
-spritesheet = "assets/character/spritesheet.png"
-frame_size  = { width = 64, height = 64 }
+skin = "placeholder"
+parts_order = ["body", "head", "eye", "eyelid", "left", "right", "mouth"]
 
-[character.states]
-idle    = { first = 0,  last = 0, fps = 1 }
-typing  = { first = 0,  last = 0, fps = 1 }
-mouse   = { first = 0,  last = 0, fps = 1 }
-gaming  = { first = 0,  last = 0, fps = 1 }
-talking = { first = 0,  last = 0, fps = 1 }
-sleep   = { first = 0,  last = 0, fps = 1 }
+[character.parts]
+body   = ["body.png"]
+head   = ["head.png"]
+eye    = ["eye.png"]
+eyelid = ["eyelid_open.png", "eyelid_closed.png"]
+left   = ["left_up.png", "left_down.png"]
+right  = ["right_up.png", "right_down.png"]
+mouth  = ["mouth_1.png", "mouth_2.png", "mouth_3.png"]
+
+[character.offsets]
+body   = { x = 48,  y = 100 }
+head   = { x = 64,  y = 60 }
+eye    = { x = 84,  y = 76 }
+eyelid = { x = 84,  y = 76 }
+left   = { x = 52,  y = 96 }
+right  = { x = 112, y = 96 }
+mouth  = { x = 84,  y = 100 }
+
+[character.look]
+max_x = 10
+max_y = 10
 
 [activity]
 idle_after_secs = 5.0

@@ -7,30 +7,32 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// FrameRange is a contiguous run of frames in the sprite sheet.
-type FrameRange struct {
-	First int `toml:"first"`
-	Last  int `toml:"last"`
-	FPS   int `toml:"fps"`
-}
-
 // Config is the data-driven character manifest (assets/character/manifest.toml).
 type Config struct {
 	Character CharacterConfig `toml:"character"`
 	Activity  ActivityConfig  `toml:"activity"`
 }
 
-// CharacterConfig describes the sprite sheet and per-state frame mappings.
+// CharacterConfig describes the rig parts (composited PNGs), their composition
+// offsets/z-order, and cursor look tracking.
 type CharacterConfig struct {
-	Spritesheet string                `toml:"spritesheet"`
-	FrameSize   FrameSize             `toml:"frame_size"`
-	States      map[string]FrameRange `toml:"states"`
+	Skin       string              `toml:"skin"`
+	PartsOrder []string            `toml:"parts_order"`
+	Parts      map[string][]string `toml:"parts"`
+	Offsets    map[string]Offset   `toml:"offsets"`
+	Look       LookConfig          `toml:"look"`
 }
 
-// FrameSize is the pixel size of a single cell in the sprite sheet.
-type FrameSize struct {
-	Width  int `toml:"width"`
-	Height int `toml:"height"`
+// Offset is a part's position in the composition canvas (top-left origin).
+type Offset struct {
+	X int `toml:"x"`
+	Y int `toml:"y"`
+}
+
+// LookConfig caps how far the head/eye parts track the cursor (px each axis).
+type LookConfig struct {
+	MaxX float64 `toml:"max_x"`
+	MaxY float64 `toml:"max_y"`
 }
 
 // ActivityConfig holds the state machine timings and mic threshold.

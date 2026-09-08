@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"image"
-	_ "image/png"
 	"log"
-	"math"
+	"path/filepath"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -18,20 +16,19 @@ const (
 	screenH = 192
 )
 
-// Game is the top-level Ebitengine game. Milestone 1: transparent window + test
-// sprite. Milestone 2: global input pipeline (evdev -> ActivitySignals).
-// Milestone 3: mic capture (pulse -> smoothed MicLevel + talking detection).
-// Milestone 4: activity state machine merging input + mic with idle/sleep.
-// The character controller plugs in on top in Milestone 5.
+// manifestPath is the character manifest; part files resolve relative to it.
+const manifestPath = "assets/character/manifest.toml"
+
+// Game is the top-level Ebitengine game. Milestones 1-4 wired the transparent
+// window, global input, mic, and the activity state machine; Milestone 5 adds
+// the rig character that switches parts per state and tracks the cursor.
 type Game struct {
-	cfg    *Config
-	sheet  *ebiten.Image
-	sprite *ebiten.Image
-	angle  float64
-	input  input.Backend
-	sigs   input.ActivitySignals
-	mic    *Mic
-	act    *Activity
+	cfg   *Config
+	char  *Character
+	input input.Backend
+	sigs  input.ActivitySignals
+	mic   *Mic
+	act   *Activity
 
 	micLevel   float64
 	micTalking bool
@@ -39,39 +36,41 @@ type Game struct {
 	prevKey    int
 	prevMouse  int
 	state      ActivityState
+	lastFrame  time.Time
 }
 
 func NewGame() (*Game, error) {
-	cfg, err := LoadConfig("assets/character/manifest.toml")
+	cfg, err := LoadConfig(manifestPath)
 	if err != nil {
 		return nil, err
 	}
 
-	sheet, _, err := ebitenutil.NewImageFromFile(cfg.Character.Spritesheet)
+	rig, err := LoadRig(cfg, filepath.Dir(manifestPath))
 	if err != nil {
-		return nil, fmt.Errorf("load spritesheet: %w", err)
+		return nil, err
 	}
 
-	// Test sprite: a single cell from the sheet. In later milestones this is the
-	// per-state frame controller; for now just draw the first cell.
-	fw, fh := cfg.Character.FrameSize.Width, cfg.Character.FrameSize.Height
-	sprite := sheet.SubImage(image.Rect(0, 0, fw, fh)).(*ebiten.Image)
-
+	now := time.Now()
 	g := &Game{
-		cfg:    cfg,
-		sheet:  sheet,
-		sprite: sprite,
+		cfg:       cfg,
+		char:      NewCharacter(rig),
+		act:       NewActivity(cfg.Activity, now),
+		lastFrame: now,
 	}
 	g.input = input.NewBackend()
 	g.mic = NewMic()
-	g.act = NewActivity(cfg.Activity, time.Now())
 	g.act.SetOnChange(func(s ActivityState) {
 		log.Printf("activity: state -> %s", s)
+		g.char.SetState(s)
 	})
 	return g, nil
 }
 
 func (g *Game) Update() error {
+	now := time.Now()
+	dt := now.Sub(g.lastFrame).Seconds()
+	g.lastFrame = now
+
 	// Debug: Esc quits.
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		return ebiten.Termination
@@ -80,11 +79,7 @@ func (g *Game) Update() error {
 	g.pollInput()
 	g.updateMic()
 	g.updateActivity()
-
-	// Test sprite gently looks toward the cursor (placeholder for cursor
-	// tracking in Milestone 5). Screen center -> cursor vector.
-	cx, cy := ebiten.CursorPosition()
-	g.angle = math.Atan2(float64(cy-screenH/2), float64(cx-screenW/2))
+	g.char.Update(dt)
 	return nil
 }
 
@@ -99,8 +94,7 @@ func (g *Game) pollInput() {
 }
 
 // updateMic samples the smoothed loudness into the game state, logs talking
-// state transitions and a throttled periodic level, and exposes the result on
-// screen.
+// state transitions and a throttled periodic level.
 func (g *Game) updateMic() {
 	if g.mic == nil {
 		return
@@ -119,8 +113,8 @@ func (g *Game) updateMic() {
 }
 
 // updateActivity feeds this tick's per-tick key/mouse deltas plus the mic
-// talking state into the state machine. Transitions are logged via the
-// callback registered in NewGame.
+// talking state into the state machine. Transitions are logged and forwarded
+// to the character via the callback registered in NewGame.
 func (g *Game) updateActivity() {
 	now := time.Now()
 	dk := g.sigs.KeyCount - g.prevKey
@@ -131,17 +125,15 @@ func (g *Game) updateActivity() {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(-float64(g.sprite.Bounds().Dx())/2, -float64(g.sprite.Bounds().Dy())/2)
-	op.GeoM.Rotate(g.angle * 0.2)
-	op.GeoM.Translate(screenW/2, screenH/2)
-	screen.DrawImage(g.sprite, op)
+	cx, cy := ebiten.CursorPosition()
+	lx, ly := lookOffset(cx, cy, screenW, screenH, g.cfg.Character.Look.MaxX, g.cfg.Character.Look.MaxY)
+	g.char.Draw(screen, lx, ly)
 
 	talking := "no"
 	if g.micTalking {
 		talking = "YES"
 	}
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("M4: %-6s k=%d m=%d mic=%.2f talk=%s",
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("M5: %-6s k=%d m=%d mic=%.2f talk=%s",
 		g.state, g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
 }
 
