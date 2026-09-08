@@ -39,9 +39,10 @@ type Game struct {
 	prevDY     int
 	state      ActivityState
 	lastFrame  time.Time
+	debug      bool
 }
 
-func NewGame(assetsFlag, skinFlag string) (*Game, error) {
+func NewGame(assetsFlag, skinFlag string, debug bool) (*Game, error) {
 	res := ResolveAssets(assetsFlag, skinFlag)
 	log.Printf("assets: loading %s", res.Source)
 	cfg, err := LoadConfig(res.ManifestPath)
@@ -61,6 +62,7 @@ func NewGame(assetsFlag, skinFlag string) (*Game, error) {
 		act:          NewActivity(cfg.Activity, now),
 		manifestPath: res.ManifestPath,
 		lastFrame:    now,
+		debug:        debug,
 	}
 	g.input = input.NewBackend()
 	g.mic = NewMic()
@@ -109,11 +111,11 @@ func (g *Game) updateMouse(dt float64) {
 	g.prevDY = g.sigs.MouseDY
 }
 
-// pollInput drains the global input backend into ActivitySignals each tick
-// and logs a one-line summary whenever activity was observed.
+// pollInput drains the global input backend into ActivitySignals each tick.
+// The per-tick summary is verbose, so it is only logged in debug mode.
 func (g *Game) pollInput() {
 	n := g.sigs.Drain(g.input.Events())
-	if n > 0 {
+	if g.debug && n > 0 {
 		log.Printf("input: drained %d event(s) this tick — totals key=%d mouse=%d",
 			n, g.sigs.KeyCount, g.sigs.MouseCount)
 	}
@@ -132,7 +134,7 @@ func (g *Game) updateMic() {
 			talking, g.micLevel, g.cfg.Activity.MicThreshold)
 	}
 	g.micTalking = talking
-	if time.Since(g.lastMicLog) >= 2*time.Second {
+	if g.debug && time.Since(g.lastMicLog) >= 2*time.Second {
 		log.Printf("mic: level=%.3f talking=%v", g.micLevel, talking)
 		g.lastMicLog = time.Now()
 	}
@@ -161,12 +163,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 	g.char.Draw(screen, lx, ly)
 
-	talking := "no"
-	if g.micTalking {
-		talking = "YES"
+	if g.debug {
+		talking := "no"
+		if g.micTalking {
+			talking = "YES"
+		}
+		ebitenutil.DebugPrint(screen, fmt.Sprintf("%-6s k=%d m=%d mic=%.2f talk=%s",
+			g.state, g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
 	}
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("%-6s k=%d m=%d mic=%.2f talk=%s",
-		g.state, g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
 	if g.edit.active {
 		g.drawEditOverlay(screen)
 	}
@@ -188,9 +192,10 @@ func (g *Game) Layout(outsideW, outsideH int) (int, int) {
 func main() {
 	assetsFlag := flag.String("assets", "", "assets directory (overrides PNGTUBER_ASSETS)")
 	skinFlag := flag.String("skin", "", "skin name under <assets>/skins (overrides PNGTUBER_SKIN)")
+	debugFlag := flag.Bool("debug", false, "show the in-window status overlay and verbose input/mic logs")
 	flag.Parse()
 
-	g, err := NewGame(*assetsFlag, *skinFlag)
+	g, err := NewGame(*assetsFlag, *skinFlag, *debugFlag)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -42,7 +42,9 @@ go run .
 On other distros, install the X11/OpenGL development headers (e.g. `libx11-dev`, `libgl-dev`) and
 build with cgo enabled (default).
 
-The window is **transparent, undecorated, and not floating**, sized 192×192. Press `Esc` to quit.
+The window is **transparent, undecorated, and not floating**, sized to the loaded skin. Press `Esc`
+to quit. Run with `--debug` to show the in-window status overlay (state + input/mic counters) and
+verbose input/mic console logs; by default the console only logs startup and state transitions.
 
 ## OBS capture
 

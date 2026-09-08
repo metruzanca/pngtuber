@@ -515,6 +515,11 @@ the real cursor. The hand-layout debounce was **halved** (`hand_move_delay_secs`
 hands relocate to/from the keyboard in half the time. Tool emits both; skins + placeholder
 regenerated.
 
+**Log/overlay quieting:** the in-window status display (state + k/m counters + mic) and the verbose
+console logs (`input: drained …`, the 2s `mic: level=…` heartbeat) are now **off by default** and
+gated behind a `--debug` flag. Startup lines (assets, input devices, mic recording) and activity
+state transitions still log normally, so the console stays readable during normal use.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the
