@@ -38,7 +38,7 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 - [x] Milestone 3: Mic capture
 - [x] Milestone 4: Activity state machine
 - [x] Milestone 5: Character animation
-- [ ] Milestone 6: Config manifest
+- [x] Milestone 6: Config manifest
 - [ ] Milestone 7: Asset data dir + first skin
 - [ ] Milestone 8: Asset integration (more skins)
 
@@ -289,7 +289,7 @@ from the scene**, not guessed.
 | 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ✅ |
 | 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ✅ |
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ✅ |
-| 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ☐ |
+| 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ✅ |
 | 7 | Asset data dir + first skin | `assets.go` resolution, scene→manifest tool (§5.8), `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS with offsets derived from `coworker_1036.scn` | ☐ |
 | 8 | Asset integration (more skins) | Real rigs wired in for other skins as desired | Skin selection + per-skin parts/offsets work without code changes | ☐ |
 
@@ -413,6 +413,15 @@ cycle, lookOffset), vet, build, gofmt clean; headless compositor rendered each s
 checks confirmed per-state part switching (hands, eyelid, mouth size); live app starts, loads all
 parts, and the window opens at 192×192. (`x11grab` unavailable in this ffmpeg build, so the visual
 check was done via the headless compositor instead of a window capture.)
+
+**Milestone 6 (done):** the last hardcoded state logic moved into the manifest. `config.go` gained
+`[character.variants]` (part → state → variant index, keyed by activity name) and
+`[character.animations]` (`mouth = {part, fps}`, `blink = {part, closed_variant, interval_secs,
+duration_secs}`). `Character.variantIndex` now resolves the per-state mapping from TOML first, then
+the dynamic mouth/blink behaviors (both optional). Parts, offsets, z-order, cursor look, animation
+parameters, and activity thresholds are all data-driven: editing `manifest.toml` changes behavior
+without recompiling. Verified by a dedicated test that rewrites a manifest and confirms the variant
+selection and `idle_after_secs` change at runtime; full suite + vet + build + gofmt clean.
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`

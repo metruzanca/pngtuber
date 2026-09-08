@@ -53,7 +53,7 @@ func NewGame() (*Game, error) {
 	now := time.Now()
 	g := &Game{
 		cfg:       cfg,
-		char:      NewCharacter(rig),
+		char:      NewCharacter(rig, cfg.Character),
 		act:       NewActivity(cfg.Activity, now),
 		lastFrame: now,
 	}

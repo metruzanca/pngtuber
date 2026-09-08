@@ -24,6 +24,19 @@ left   = { x = 52,  y = 96 }
 right  = { x = 112, y = 96 }
 mouth  = { x = 84,  y = 100 }
 
+# Per-state variant mapping: part -> state -> variant index. States use the
+# activity names (idle, mouse, typing, gaming, talking, sleep); parts use 0
+# (default/calm variant) for any state not listed.
+[character.variants]
+left   = { typing = 1, gaming = 1 }
+right  = { mouse = 1, gaming = 1 }
+eyelid = { sleep = 1 }
+
+# Dynamic part behaviors. Either can be disabled by leaving part empty.
+[character.animations]
+mouth = { part = "mouth", fps = 10.0 }                      # talk frames cycle while Talking
+blink = { part = "eyelid", closed_variant = 1, interval_secs = 3.0, duration_secs = 0.15 }
+
 [character.look]
 max_x = 10
 max_y = 10

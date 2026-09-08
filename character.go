@@ -2,10 +2,13 @@
 //
 // Parts are composited PNGs (body, head, eye, eyelid, hands, mouth) loaded
 // from the manifest with offsets/z-order. Each part can have several variants
-// (e.g. hand up/down, mouth-open frames); the controller picks a variant per
-// activity state and animates variant sequences by accumulated elapsed time so
-// the manifest's fps is honored regardless of the game's TPS. The head/eye
-// parts track the cursor via a capped look offset.
+// (e.g. hand up/down, mouth-open frames). The per-state variant mapping and
+// the two dynamic behaviors (mouth talk animation, blink) are all
+// data-driven via the manifest (Milestone 6): [character.variants] and
+// [character.animations], so editing the TOML changes behavior without
+// recompiling. Variant sequences animate by accumulated elapsed time so the
+// manifest's fps is honored regardless of the game's TPS. The head/eye parts
+// track the cursor via a capped look offset.
 package main
 
 import (
@@ -16,15 +19,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-)
-
-const (
-	// blinkInterval is the seconds between blinks; blinkDuration how long the
-	// eyelid stays closed during a blink.
-	blinkInterval = 3.0
-	blinkDuration = 0.15
-	// mouthFPS drives the talk mouth-open frames while talking.
-	mouthFPS = 10.0
 )
 
 // frameLoop cycles through a frame sequence by accumulated elapsed time, so
@@ -79,22 +73,39 @@ func LoadRig(cfg *Config, baseDir string) (*Rig, error) {
 
 // Character composes the rig parts and switches variants by activity state.
 type Character struct {
-	rig         *Rig
-	state       ActivityState
-	mouth       frameLoop
+	rig      *Rig
+	state    ActivityState
+	variants map[string]map[string]int
+	anim     AnimationsConfig
+	mouth    frameLoop
+
 	timeToBlink float64
 	blinkT      float64
 	blinking    bool
 }
 
-// NewCharacter creates a Character in the Idle state.
-func NewCharacter(rig *Rig) *Character {
-	return &Character{
-		rig:         rig,
-		state:       Idle,
-		timeToBlink: blinkInterval,
-		mouth:       frameLoop{fps: mouthFPS, nframes: len(rig.parts["mouth"])},
+// NewCharacter creates a Character in the Idle state, driven by the manifest's
+// variant mapping and animation configuration.
+func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
+	mouthFPS := cc.Animations.Mouth.FPS
+	if mouthFPS <= 0 {
+		mouthFPS = 10
 	}
+	c := &Character{
+		rig:      rig,
+		state:    Idle,
+		variants: cc.Variants,
+		anim:     cc.Animations,
+		mouth:    frameLoop{fps: mouthFPS, nframes: len(rig.parts[cc.Animations.Mouth.Part])},
+	}
+	if c.anim.Blink.IntervalSecs <= 0 {
+		c.anim.Blink.IntervalSecs = 3.0
+	}
+	if c.anim.Blink.DurationSecs <= 0 {
+		c.anim.Blink.DurationSecs = 0.15
+	}
+	c.timeToBlink = c.anim.Blink.IntervalSecs
+	return c
 }
 
 // SetState switches the active activity state, resetting animated variants.
@@ -106,49 +117,43 @@ func (c *Character) SetState(s ActivityState) {
 	c.mouth.reset()
 	c.blinking = false
 	c.blinkT = 0
-	c.timeToBlink = blinkInterval
+	c.timeToBlink = c.anim.Blink.IntervalSecs
 }
 
 // Update advances the animation clocks by dt seconds (real elapsed time).
 func (c *Character) Update(dt float64) {
 	c.mouth.update(dt)
-	if c.state == Sleep {
-		// Eyelid is forced closed by variantIndex; no blinking needed.
+	if c.anim.Blink.Part == "" || c.state == Sleep {
+		// No blink configured, or asleep (eyelid forced closed via variants).
 		return
 	}
 	c.timeToBlink -= dt
 	if c.timeToBlink <= 0 {
 		c.blinking = true
 		c.blinkT += dt
-		if c.blinkT >= blinkDuration {
+		if c.blinkT >= c.anim.Blink.DurationSecs {
 			c.blinking = false
-			c.timeToBlink = blinkInterval
+			c.timeToBlink = c.anim.Blink.IntervalSecs
 			c.blinkT = 0
 		}
 	}
 }
 
 // variantIndex returns which variant image of a part to show for the current
-// state. Variant 0 is the default/calm variant for every part.
+// state. Resolution order: the manifest's per-state [character.variants]
+// mapping, then the dynamic behaviors (mouth talk animation, blink). Variant 0
+// is the default/calm variant for every part.
 func (c *Character) variantIndex(part string) int {
-	switch part {
-	case "left": // 0=up, 1=down
-		if c.state == Typing || c.state == Gaming {
-			return 1
+	if m, ok := c.variants[part]; ok {
+		if idx, ok := m[c.state.String()]; ok {
+			return idx
 		}
-	case "right": // 0=up, 1=down
-		if c.state == Mouse || c.state == Gaming {
-			return 1
-		}
-	case "eyelid": // 0=open, 1=closed
-		if c.state == Sleep || c.blinking {
-			return 1
-		}
-	case "mouth": // 0=closed, 1..n talk frames
-		if c.state == Talking {
-			return c.mouth.index()
-		}
-		return 0
+	}
+	if part == c.anim.Mouth.Part && c.state == Talking {
+		return c.mouth.index()
+	}
+	if part == c.anim.Blink.Part && c.blinking {
+		return c.anim.Blink.ClosedVariant
 	}
 	return 0
 }

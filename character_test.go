@@ -1,10 +1,31 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
+
+func testConfig() CharacterConfig {
+	return CharacterConfig{
+		Variants: map[string]map[string]int{
+			"left":   {"typing": 1, "gaming": 1},
+			"right":  {"mouse": 1, "gaming": 1},
+			"eyelid": {"sleep": 1},
+		},
+		Animations: AnimationsConfig{
+			Mouth: MouthAnimConfig{Part: "mouth", FPS: 10},
+			Blink: BlinkAnimConfig{Part: "eyelid", ClosedVariant: 1, IntervalSecs: 3.0, DurationSecs: 0.15},
+		},
+	}
+}
+
+func testCharacter() *Character {
+	rig := &Rig{parts: map[string][]*ebiten.Image{"mouth": {nil, nil, nil}}}
+	return NewCharacter(rig, testConfig())
+}
 
 func TestFrameLoopLooping(t *testing.T) {
 	f := frameLoop{fps: 10, nframes: 3}
@@ -45,7 +66,7 @@ func TestFrameLoopResetAndSingle(t *testing.T) {
 }
 
 func TestVariantSelectionHands(t *testing.T) {
-	c := NewCharacter(&Rig{parts: map[string][]*ebiten.Image{"mouth": {nil, nil, nil}}})
+	c := testCharacter()
 	cases := []struct {
 		state ActivityState
 		left  int
@@ -70,7 +91,7 @@ func TestVariantSelectionHands(t *testing.T) {
 }
 
 func TestVariantSelectionEyelid(t *testing.T) {
-	c := NewCharacter(&Rig{parts: map[string][]*ebiten.Image{"mouth": {nil, nil, nil}}})
+	c := testCharacter()
 	c.state = Sleep
 	if got := c.variantIndex("eyelid"); got != 1 {
 		t.Fatalf("sleep eyelid = %d, want 1 (closed)", got)
@@ -87,7 +108,7 @@ func TestVariantSelectionEyelid(t *testing.T) {
 }
 
 func TestVariantSelectionMouth(t *testing.T) {
-	c := NewCharacter(&Rig{parts: map[string][]*ebiten.Image{"mouth": {nil, nil, nil}}})
+	c := testCharacter()
 	if got := c.variantIndex("mouth"); got != 0 {
 		t.Fatalf("non-talking mouth = %d, want 0 (closed)", got)
 	}
@@ -99,7 +120,7 @@ func TestVariantSelectionMouth(t *testing.T) {
 }
 
 func TestSetStateResetsAnimation(t *testing.T) {
-	c := NewCharacter(&Rig{parts: map[string][]*ebiten.Image{"mouth": {nil, nil, nil}}})
+	c := testCharacter()
 	c.state = Talking
 	c.mouth.elapsed = 5.0
 	c.Update(0.05)
@@ -118,13 +139,15 @@ func TestSetStateResetsAnimation(t *testing.T) {
 }
 
 func TestBlinkCycle(t *testing.T) {
-	c := NewCharacter(&Rig{parts: map[string][]*ebiten.Image{"mouth": {nil, nil, nil}}})
+	c := testCharacter()
 	if c.blinking {
 		t.Fatal("should start not blinking")
 	}
 	// Real-world-sized updates (50ms). Well before the 3s interval: no blink.
 	const step = 0.05
-	for i := 0; i < int(blinkInterval/step)-2; i++ {
+	const interval = 3.0
+	const duration = 0.15
+	for i := 0; i < int(interval/step)-2; i++ {
 		c.Update(step)
 	}
 	if c.blinking {
@@ -148,12 +171,12 @@ func TestBlinkCycle(t *testing.T) {
 	if !c.blinking {
 		t.Fatal("still blinking mid-blink")
 	}
-	// Past blinkDuration the blink ends.
+	// Past the blink duration the blink ends.
 	for i := 0; i < 4; i++ {
 		c.Update(step)
 	}
 	if c.blinking {
-		t.Fatal("blink should have ended after blinkDuration")
+		t.Fatal("blink should have ended after duration")
 	}
 }
 
@@ -179,5 +202,71 @@ func TestLookOffset(t *testing.T) {
 	}
 	if x > 10 || y < -10 {
 		t.Errorf("diagonal offset out of range: (%v, %v)", x, y)
+	}
+}
+
+// TestManifestDrivenBehavior proves the M6 exit criterion: editing
+// manifest.toml changes which variant a part shows without recompiling.
+func TestManifestDrivenBehavior(t *testing.T) {
+	dir := t.TempDir()
+	build := func(variants string) *Character {
+		content := "[character]\n" +
+			"skin = \"test\"\n" +
+			"parts_order = [\"left\"]\n" +
+			"[character.parts]\n" +
+			"left = [\"up.png\", \"down.png\"]\n" +
+			"[character.variants]\n" + variants + "\n" +
+			"[character.offsets]\n" +
+			"left = { x = 0, y = 0 }\n"
+		path := filepath.Join(dir, "manifest.toml")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := LoadConfig(path)
+		if err != nil {
+			t.Fatalf("LoadConfig: %v", err)
+		}
+		rig := &Rig{parts: map[string][]*ebiten.Image{"left": {nil, nil}}}
+		return NewCharacter(rig, cfg.Character)
+	}
+
+	// Mapping present: typing shows variant 1.
+	c := build("left = { typing = 1 }")
+	c.state = Typing
+	if got := c.variantIndex("left"); got != 1 {
+		t.Fatalf("left/typing = %d, want 1", got)
+	}
+	c.state = Idle
+	if got := c.variantIndex("left"); got != 0 {
+		t.Fatalf("left/idle = %d, want 0 (unmapped -> default)", got)
+	}
+
+	// Edit the manifest (remove the mapping): same state now shows variant 0.
+	c2 := build("")
+	c2.state = Typing
+	if got := c2.variantIndex("left"); got != 0 {
+		t.Fatalf("left/typing after edit = %d, want 0", got)
+	}
+
+	// Editing the activity thresholds also takes effect without recompiling.
+	threshPath := filepath.Join(dir, "manifest.toml")
+	cfg, err := LoadConfig(threshPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Activity.IdleAfterSecs != 0 {
+		t.Fatalf("default IdleAfterSecs = %v, want 0", cfg.Activity.IdleAfterSecs)
+	}
+	content, _ := os.ReadFile(threshPath)
+	content = append(content, []byte("\n[activity]\nidle_after_secs = 7.0\n")...)
+	if err := os.WriteFile(threshPath, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = LoadConfig(threshPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Activity.IdleAfterSecs != 7.0 {
+		t.Fatalf("edited IdleAfterSecs = %v, want 7.0", cfg.Activity.IdleAfterSecs)
 	}
 }
