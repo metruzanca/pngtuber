@@ -18,3 +18,4 @@ sleep   = { first = 0,  last = 0, fps = 1 }
 idle_after_secs = 5.0
 sleep_after_secs = 120.0
 mic_threshold = 0.08
+mic_hysteresis = 0.5

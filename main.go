@@ -6,6 +6,7 @@ import (
 	_ "image/png"
 	"log"
 	"math"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -19,7 +20,8 @@ const (
 
 // Game is the top-level Ebitengine game. Milestone 1: transparent window + test
 // sprite. Milestone 2: global input pipeline (evdev -> ActivitySignals).
-// Subsystems (mic, activity, character controller) plug in here later.
+// Milestone 3: mic capture (pulse -> smoothed MicLevel + talking detection).
+// Subsystems (activity state machine, character controller) plug in later.
 type Game struct {
 	cfg    *Config
 	sheet  *ebiten.Image
@@ -27,6 +29,11 @@ type Game struct {
 	angle  float64
 	input  input.Backend
 	sigs   input.ActivitySignals
+	mic    *Mic
+
+	micLevel   float64
+	micTalking bool
+	lastMicLog time.Time
 }
 
 func NewGame() (*Game, error) {
@@ -51,6 +58,7 @@ func NewGame() (*Game, error) {
 		sprite: sprite,
 	}
 	g.input = input.NewBackend()
+	g.mic = NewMic()
 	return g, nil
 }
 
@@ -61,6 +69,7 @@ func (g *Game) Update() error {
 	}
 
 	g.pollInput()
+	g.updateMic()
 
 	// Test sprite gently looks toward the cursor (placeholder for cursor
 	// tracking in Milestone 5). Screen center -> cursor vector.
@@ -79,6 +88,26 @@ func (g *Game) pollInput() {
 	}
 }
 
+// updateMic samples the smoothed loudness into the game state, logs talking
+// state transitions and a throttled periodic level, and exposes the result on
+// screen.
+func (g *Game) updateMic() {
+	if g.mic == nil {
+		return
+	}
+	g.micLevel = g.mic.Level()
+	talking := g.mic.Talking(g.cfg.Activity.MicThreshold, g.cfg.Activity.MicHysteresis)
+	if talking != g.micTalking {
+		log.Printf("mic: talking=%v level=%.3f (threshold=%.2f)",
+			talking, g.micLevel, g.cfg.Activity.MicThreshold)
+	}
+	g.micTalking = talking
+	if time.Since(g.lastMicLog) >= 2*time.Second {
+		log.Printf("mic: level=%.3f talking=%v", g.micLevel, talking)
+		g.lastMicLog = time.Now()
+	}
+}
+
 func (g *Game) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(-float64(g.sprite.Bounds().Dx())/2, -float64(g.sprite.Bounds().Dy())/2)
@@ -86,8 +115,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate(screenW/2, screenH/2)
 	screen.DrawImage(g.sprite, op)
 
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("M2: input key=%d mouse=%d",
-		g.sigs.KeyCount, g.sigs.MouseCount))
+	talking := "no"
+	if g.micTalking {
+		talking = "YES"
+	}
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("M3: k=%d m=%d mic=%.2f talk=%s",
+		g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
 }
 
 func (g *Game) Layout(outsideW, outsideH int) (int, int) {
@@ -100,6 +133,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer g.input.Close()
+	defer g.mic.Close()
 
 	ebiten.SetWindowSize(screenW, screenH)
 	ebiten.SetWindowTitle("pngtuber")

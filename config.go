@@ -38,6 +38,9 @@ type ActivityConfig struct {
 	IdleAfterSecs  float64 `toml:"idle_after_secs"`
 	SleepAfterSecs float64 `toml:"sleep_after_secs"`
 	MicThreshold   float64 `toml:"mic_threshold"`
+	// MicHysteresis is the fraction of the threshold the level must drop below
+	// before a talking state is released (0..1, e.g. 0.5 = half threshold).
+	MicHysteresis float64 `toml:"mic_hysteresis"`
 }
 
 // LoadConfig reads the TOML manifest at path.

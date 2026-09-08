@@ -35,7 +35,7 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 - [x] Review + port plan to Go + Ebitengine (this doc)
 - [x] Milestone 1: Bootstrap + transparent window
 - [x] Milestone 2: Global input pipeline
-- [ ] Milestone 3: Mic capture
+- [x] Milestone 3: Mic capture
 - [ ] Milestone 4: Activity state machine
 - [ ] Milestone 5: Character animation
 - [ ] Milestone 6: Config manifest
@@ -286,7 +286,7 @@ from the scene**, not guessed.
 |---|---|---|---|---|
 | 1 | Bootstrap + transparent window | Ebitengine app, transparent undecorated window, test sprite, OBS guide stub | Window renders alpha correctly in OBS Game Capture (Allow Transparency) on X11 and Wayland(XWayland) | ✅ |
 | 2 | Global input pipeline | evdev goroutine → `ActivitySignals`; activity logged to console | Keystrokes/mouse motion while another app is focused flip counters; no crash without `/dev/input` perms | ✅ |
-| 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ☐ |
+| 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ✅ |
 | 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ☐ |
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ☐ |
 | 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ☐ |
@@ -379,6 +379,16 @@ actionable `usermod -aG input` warning and keeps running (mic-only mode) instead
 Verified: `go test ./...`, `go vet`, `go build`, `gofmt` clean; smoke run showed real mouse events
 filling counters while another app had focus. `github.com/grafov/evdev v1.0.0` added (uses cgo —
 `linux/input.h` headers needed at build time, provided by `shell.nix`).
+
+**Milestone 3 (done):** `mic.go` — `Mic` connects to the default PulseAudio/PipeWire source via
+`jfreymuth/pulse` (`RecordLatency(0.05)` → ~50 ms buffers), computes per-buffer RMS, low-pass
+smooths it (fast attack, slow release) into an `atomic.Uint32` 16.16 fixed-point, and exposes
+`Level()` (0..1) + `Talking(threshold, hysteresis)` with release-at-half-threshold default. If no
+audio server is reachable it logs a clear warning and returns nil (run without mic) — never crash.
+`main.go` samples it each tick, logs talking transitions + a 2 s periodic level, and shows it on
+screen; `mic_hysteresis` added to `manifest.toml`. Verified: `go test` (RMS/smoothing/fixed-point/
+hysteresis), vet, build, gofmt clean; smoke run recorded the real default source (Razer Seiren V3)
+and the level tracked ambient noise live.
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
