@@ -41,6 +41,9 @@ type ActivityConfig struct {
 	// MicHysteresis is the fraction of the threshold the level must drop below
 	// before a talking state is released (0..1, e.g. 0.5 = half threshold).
 	MicHysteresis float64 `toml:"mic_hysteresis"`
+	// GamingWindowSecs is how recently both a key and a mouse event must have
+	// occurred for the state to be Gaming rather than Typing/Mouse.
+	GamingWindowSecs float64 `toml:"gaming_window_secs"`
 }
 
 // LoadConfig reads the TOML manifest at path.

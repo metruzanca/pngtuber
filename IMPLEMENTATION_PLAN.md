@@ -36,7 +36,7 @@ element** (positioned/scaled inside OBS), not used as a click-through desktop ov
 - [x] Milestone 1: Bootstrap + transparent window
 - [x] Milestone 2: Global input pipeline
 - [x] Milestone 3: Mic capture
-- [ ] Milestone 4: Activity state machine
+- [x] Milestone 4: Activity state machine
 - [ ] Milestone 5: Character animation
 - [ ] Milestone 6: Config manifest
 - [ ] Milestone 7: Asset data dir + first skin
@@ -287,7 +287,7 @@ from the scene**, not guessed.
 | 1 | Bootstrap + transparent window | Ebitengine app, transparent undecorated window, test sprite, OBS guide stub | Window renders alpha correctly in OBS Game Capture (Allow Transparency) on X11 and Wayland(XWayland) | ✅ |
 | 2 | Global input pipeline | evdev goroutine → `ActivitySignals`; activity logged to console | Keystrokes/mouse motion while another app is focused flip counters; no crash without `/dev/input` perms | ✅ |
 | 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ✅ |
-| 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ☐ |
+| 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ✅ |
 | 5 | Character animation | Rig composition, state→part controller, placeholder assets, cursor tracking | Character switches parts per state (hands/mouth), loops correctly, tracks cursor | ☐ |
 | 6 | Config manifest | TOML-driven rig parts/offsets + activity thresholds | Editing `manifest.toml` changes behavior without recompiling | ☐ |
 | 7 | Asset data dir + first skin | `assets.go` resolution, scene→manifest tool (§5.8), `docs/bitbuddy-assets.md`, one BitBuddy skin (alien_cat) installed locally | App loads a real skin from `~/.local/share/pngtuber/assets/`; composite renders correctly in OBS with offsets derived from `coworker_1036.scn` | ☐ |
@@ -389,6 +389,17 @@ audio server is reachable it logs a clear warning and returns nil (run without m
 screen; `mic_hysteresis` added to `manifest.toml`. Verified: `go test` (RMS/smoothing/fixed-point/
 hysteresis), vet, build, gofmt clean; smoke run recorded the real default source (Razer Seiren V3)
 and the level tracked ambient noise live.
+
+**Milestone 4 (done):** `activity.go` — `ActivityState` enum (Sleep/Idle/Mouse/Typing/Gaming/
+Talking) + `Activity` state machine. Each tick merges per-tick key/mouse deltas and the mic talking
+flag in priority order (Talking > Gaming > Typing > Mouse > timers), holds the current pose inside
+the active window, and runs idle/sleep timers against real time since the last *any* activity
+(keyboard, mouse, or voice — talking keeps the avatar awake). Any activity wakes from sleep
+instantly. Transitions are delivered via `SetOnChange` callback and logged. `gaming_window_secs`
+added to `manifest.toml`. The clock is explicit (`Tick(now, key, mouse, micTalking)`) so timers are
+unit-testable with a fake clock. Verified: priority, gaming window, idle→sleep→wake, talking reset,
+and event emission unit tests; live smoke test showed typing → gaming → mouse transitions from real
+keyboard/mouse input while another app had focus.
 
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`

@@ -21,7 +21,8 @@ const (
 // Game is the top-level Ebitengine game. Milestone 1: transparent window + test
 // sprite. Milestone 2: global input pipeline (evdev -> ActivitySignals).
 // Milestone 3: mic capture (pulse -> smoothed MicLevel + talking detection).
-// Subsystems (activity state machine, character controller) plug in later.
+// Milestone 4: activity state machine merging input + mic with idle/sleep.
+// The character controller plugs in on top in Milestone 5.
 type Game struct {
 	cfg    *Config
 	sheet  *ebiten.Image
@@ -30,10 +31,14 @@ type Game struct {
 	input  input.Backend
 	sigs   input.ActivitySignals
 	mic    *Mic
+	act    *Activity
 
 	micLevel   float64
 	micTalking bool
 	lastMicLog time.Time
+	prevKey    int
+	prevMouse  int
+	state      ActivityState
 }
 
 func NewGame() (*Game, error) {
@@ -59,6 +64,10 @@ func NewGame() (*Game, error) {
 	}
 	g.input = input.NewBackend()
 	g.mic = NewMic()
+	g.act = NewActivity(cfg.Activity, time.Now())
+	g.act.SetOnChange(func(s ActivityState) {
+		log.Printf("activity: state -> %s", s)
+	})
 	return g, nil
 }
 
@@ -70,6 +79,7 @@ func (g *Game) Update() error {
 
 	g.pollInput()
 	g.updateMic()
+	g.updateActivity()
 
 	// Test sprite gently looks toward the cursor (placeholder for cursor
 	// tracking in Milestone 5). Screen center -> cursor vector.
@@ -108,6 +118,18 @@ func (g *Game) updateMic() {
 	}
 }
 
+// updateActivity feeds this tick's per-tick key/mouse deltas plus the mic
+// talking state into the state machine. Transitions are logged via the
+// callback registered in NewGame.
+func (g *Game) updateActivity() {
+	now := time.Now()
+	dk := g.sigs.KeyCount - g.prevKey
+	dm := g.sigs.MouseCount - g.prevMouse
+	g.prevKey = g.sigs.KeyCount
+	g.prevMouse = g.sigs.MouseCount
+	g.state = g.act.Tick(now, dk, dm, g.micTalking)
+}
+
 func (g *Game) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(-float64(g.sprite.Bounds().Dx())/2, -float64(g.sprite.Bounds().Dy())/2)
@@ -119,8 +141,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	if g.micTalking {
 		talking = "YES"
 	}
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("M3: k=%d m=%d mic=%.2f talk=%s",
-		g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("M4: %-6s k=%d m=%d mic=%.2f talk=%s",
+		g.state, g.sigs.KeyCount, g.sigs.MouseCount, g.micLevel, talking))
 }
 
 func (g *Game) Layout(outsideW, outsideH int) (int, int) {

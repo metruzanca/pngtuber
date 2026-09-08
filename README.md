@@ -4,10 +4,10 @@ An open-source, cross-platform (Linux-first) **input-reactive desktop avatar**. 
 transparent, animated character that observes your computer activity (keyboard, mouse, microphone)
 and mirrors your behavior. Capture it as a stream element in OBS.
 
-**Status: Milestones 1–3 done** — transparent undecorated window with a test sprite, the global
-input pipeline (evdev → activity counters), and mic capture (pulse → smoothed loudness + talking
-detection with hysteresis). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full
-roadmap.
+**Status: Milestones 1–4 done** — transparent undecorated window with a test sprite, the global
+input pipeline (evdev → activity counters), mic capture (pulse → smoothed loudness + talking
+detection with hysteresis), and the activity state machine (Talking/Gaming/Typing/Mouse with
+idle/sleep timers). See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full roadmap.
 
 ## Building
 

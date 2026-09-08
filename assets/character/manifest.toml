@@ -19,3 +19,4 @@ idle_after_secs = 5.0
 sleep_after_secs = 120.0
 mic_threshold = 0.08
 mic_hysteresis = 0.5
+gaming_window_secs = 1.0
