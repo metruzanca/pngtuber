@@ -210,7 +210,8 @@ func TestPartGroup(t *testing.T) {
 	}
 }
 
-// TestStretchGeoM verifies the hand stretch: the top row stays fixed and the
+// TestStretchGeoM verifies the hand stretch in IMAGE coordinates (what
+// DrawImage feeds): the whole top row stays fixed at the base offset and the
 // bottom edge reaches the tracked mouse offset.
 func TestStretchGeoM(t *testing.T) {
 	const w, h = 40, 50
@@ -224,17 +225,21 @@ func TestStretchGeoM(t *testing.T) {
 	}
 
 	m := stretchGeoM(off, w, h, dx, dy)
-	// Top-center is pinned.
-	tx, ty := m.Apply(float64(off.X+w/2), float64(off.Y))
-	closeEnough("top-center x", tx, float64(off.X+w/2), 0.1)
-	closeEnough("top-center y", ty, float64(off.Y), 0.1)
-	// Bottom-center reaches (dx, dy) from the base.
-	bx, by := m.Apply(float64(off.X+w/2), float64(off.Y+h))
+	// Top row (every x) is pinned at the base position.
+	tx, ty := m.Apply(float64(w)/2, 0)
+	closeEnough("top-center x", tx, float64(off.X+w/2), 0.001)
+	closeEnough("top-center y", ty, float64(off.Y), 0.001)
+	lx, ly := m.Apply(0, 0)
+	closeEnough("top-left x", lx, float64(off.X), 0.001)
+	closeEnough("top-left y", ly, float64(off.Y), 0.001)
+	// Bottom row slides uniformly by (dx, dy). Composed GeoM matrices carry
+	// sub-pixel float drift (~0.07px), so use a 0.1 tolerance here.
+	bx, by := m.Apply(float64(w)/2, float64(h))
 	closeEnough("bottom-center x", bx, float64(off.X+w/2)+dx, 0.1)
 	closeEnough("bottom-center y", by, float64(off.Y+h)+dy, 0.1)
-	// Zero offset is identity.
+	// Zero offset is identity placement.
 	m0 := stretchGeoM(off, w, h, 0, 0)
-	x, y := m0.Apply(float64(off.X), float64(off.Y))
+	x, y := m0.Apply(0, 0)
 	closeEnough("zero-stretch x", x, float64(off.X), 0.001)
 	closeEnough("zero-stretch y", y, float64(off.Y), 0.001)
 }

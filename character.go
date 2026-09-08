@@ -245,22 +245,24 @@ func clampF(v, lo, hi float64) float64 {
 	return v
 }
 
-// stretchGeoM builds the transform that keeps a part's top row fixed and
-// stretches it so its bottom edge reaches (dx, dy) from the base — a
-// perspective-style reach toward the mouse: horizontal shear sx = dx/h plus a
-// vertical scale sy = 1 + dy/h, composed about the part's top-center.
+// stretchGeoM builds the transform that keeps a part's top row fixed at its
+// base position and stretches it so its bottom edge reaches (dx, dy) — a
+// perspective-style reach toward the mouse. It maps IMAGE coordinates to the
+// canvas: translate the image top-center to the origin, apply a horizontal
+// skew (sx = dx/h) + vertical scale (sy = 1 + dy/h), then translate to the
+// part's base top-center. The whole top row is pinned; the bottom row slides
+// uniformly by (dx, dy).
 func stretchGeoM(off Offset, w, h int, dx, dy float64) ebiten.GeoM {
-	ax := float64(off.X) + float64(w)/2
-	ay := float64(off.Y)
+	sx := dx / float64(h)
 	sy := 1 + dy/float64(h)
 	if sy < 0.05 {
 		sy = 0.05
 	}
 	var m ebiten.GeoM
-	m.Translate(-ax, -ay)
-	m.Skew(dx/float64(h), 0)
+	m.Translate(-float64(w)/2, 0)
+	m.Skew(sx, 0)
 	m.Scale(1, sy)
-	m.Translate(ax, ay)
+	m.Translate(float64(off.X)+float64(w)/2, float64(off.Y))
 	return m
 }
 
