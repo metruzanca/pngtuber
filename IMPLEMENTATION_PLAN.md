@@ -495,6 +495,16 @@ confirmed global mouse motion flows while the window stayed unfocused.
 positions), and the static hand-state variant mapping was dropped (hands rest down in every state).
 Skins + placeholder regenerated; tests updated (resting-down hand expectations, tool ord mapping).
 
+**Edit-mode groups + hand visibility:** (1) `[character.groups]` (e.g. `eyes = ["eye","eyelid"]`)
+makes parts drag together in edit mode — the eye and blinking eyelid can no longer be moved
+independently; the editor snaps a whole group (`PartGroup`) and highlights every member. (2)
+`[character.visibility]` treats the mouse hand and left keyboard hand as the **same physical hand**:
+`mouse_hand = ["mouse"]` draws only while the committed state is Mouse/Gaming, `keyboard_hand =
+["left"]` only otherwise — exactly one appears at a time in normal mode, while both are visible in
+edit mode; the mouse device and right hand stay visible always. Tool emits both blocks; skins +
+placeholder regenerated; unit tests (`partVisible` per state incl. edit mode, group drag) and
+headless composite checks (left/mouse hand anchors differ between typing and mouse) verify.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

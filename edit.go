@@ -30,10 +30,11 @@ import (
 // editState tracks the interactive rig editor.
 type editState struct {
 	active      bool
-	dragging    string      // part being dragged, "" if none
-	dragStart   image.Point // mouse position when the drag began
-	baseOffsets []Offset    // the dragged part's offsets at drag start
-	hovered     string      // part under the cursor (for the overlay)
+	dragging    string              // part grabbed by the drag, "" if none
+	dragParts   []string            // all parts moved by the drag (the part's group)
+	dragStart   image.Point         // mouse position when the drag began
+	baseOffsets map[string][]Offset // each dragged part's offsets at drag start
+	hovered     string              // part under the cursor (for the overlay)
 }
 
 // handleEdit updates edit mode each tick: toggling, dragging, and saving.
@@ -64,18 +65,25 @@ func (g *Game) handleEdit() {
 			part, ok := g.char.HitPart(mx, my)
 			if ok {
 				g.edit.dragging = part
+				g.edit.dragParts = g.char.PartGroup(part)
 				g.edit.dragStart = image.Pt(mx, my)
-				g.edit.baseOffsets = cloneOffsets(g.char.rig.offsets[part])
-				log.Printf("edit: dragging %s", part)
+				g.edit.baseOffsets = map[string][]Offset{}
+				for _, p := range g.edit.dragParts {
+					g.edit.baseOffsets[p] = cloneOffsets(g.char.rig.offsets[p])
+				}
+				log.Printf("edit: dragging %s (+%d linked)", part, len(g.edit.dragParts)-1)
 			}
 		}
 		if g.edit.dragging != "" {
 			dx := mx - g.edit.dragStart.X
 			dy := my - g.edit.dragStart.Y
-			g.char.rig.offsets[g.edit.dragging] = shiftedOffsets(g.edit.baseOffsets, dx, dy)
+			for _, p := range g.edit.dragParts {
+				g.char.rig.offsets[p] = shiftedOffsets(g.edit.baseOffsets[p], dx, dy)
+			}
 		}
 	} else {
 		g.edit.dragging = ""
+		g.edit.dragParts = nil
 		g.edit.baseOffsets = nil
 	}
 }
@@ -188,8 +196,13 @@ func (g *Game) drawEditOverlay(screen *ebiten.Image) {
 	if part == "" {
 		return
 	}
+	// Highlight the whole drag group (e.g. eye + eyelid move together).
+	for _, p := range g.char.PartGroup(part) {
+		if r, ok := g.char.partRect(p); ok {
+			highlightRect(screen, r)
+		}
+	}
 	if r, ok := g.char.partRect(part); ok {
-		highlightRect(screen, r)
 		offs := g.char.rig.offsets[part]
 		off := offs[0]
 		ebitenutil.DebugPrintAt(screen,

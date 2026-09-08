@@ -148,6 +148,68 @@ func TestPressAlternatesHands(t *testing.T) {
 	}
 }
 
+// TestPartVisible verifies the mouse hand and left keyboard hand are mutually
+// exclusive (same physical hand), the mouse device + right hand stay visible,
+// and both show in edit mode.
+func TestPartVisible(t *testing.T) {
+	c := testCharacter()
+	mouseOn := func() {
+		c.hands = Mouse
+		if !c.partVisible("mouse") || c.partVisible("left") {
+			t.Errorf("mouse active: mouse visible=%v left visible=%v, want true/false", c.partVisible("mouse"), c.partVisible("left"))
+		}
+		if !c.partVisible("mouse_dev") || !c.partVisible("right") {
+			t.Error("mouse device / right hand must stay visible while mouse active")
+		}
+	}
+	mouseOff := func() {
+		c.hands = Typing
+		if c.partVisible("mouse") || !c.partVisible("left") {
+			t.Errorf("typing: mouse visible=%v left visible=%v, want false/true", c.partVisible("mouse"), c.partVisible("left"))
+		}
+		if !c.partVisible("mouse_dev") || !c.partVisible("right") {
+			t.Error("mouse device / right hand must stay visible while typing")
+		}
+	}
+	mouseOn()
+	mouseOff()
+	// Gaming also counts as mouse-active.
+	c.hands = Gaming
+	if !c.partVisible("mouse") || c.partVisible("left") {
+		t.Error("gaming: mouse hand should show, left keyboard hand hidden")
+	}
+	// Edit mode (steady): both hands visible.
+	c.SetSteady(true)
+	c.hands = Typing
+	if !c.partVisible("mouse") || !c.partVisible("left") {
+		t.Error("edit mode should show both hand poses")
+	}
+}
+
+// TestPartGroup verifies dragging a group member moves the whole group.
+func TestPartGroup(t *testing.T) {
+	c := testCharacter()
+	got := c.PartGroup("eye")
+	if len(got) != 2 || got[0] != "eye" || got[1] != "eyelid" {
+		t.Fatalf("PartGroup(eye) = %v, want [eye eyelid]", got)
+	}
+	if got := c.PartGroup("body"); len(got) != 1 || got[0] != "body" {
+		t.Fatalf("PartGroup(body) = %v, want [body]", got)
+	}
+	// A group drag moves every member by the same delta.
+	rig := &Rig{offsets: map[string][]Offset{
+		"eye":    {{X: 1, Y: 2}},
+		"eyelid": {{X: 5, Y: 6}},
+	}}
+	c2 := NewCharacter(rig, testConfig())
+	for _, p := range c2.PartGroup("eye") {
+		rig.offsets[p] = shiftedOffsets(rig.offsets[p], 10, 5)
+	}
+	if rig.offsets["eye"][0] != (Offset{11, 7}) || rig.offsets["eyelid"][0] != (Offset{15, 11}) {
+		t.Errorf("group drag offsets = %+v, want eye{11,7} eyelid{15,11}", rig.offsets)
+	}
+}
+
 func TestLookPartsConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "manifest.toml")
 	if err := os.WriteFile(path, []byte("[character.look]\nparts = [\"head\"]\nmax_x = 10\nmax_y = 10\n"), 0o644); err != nil {

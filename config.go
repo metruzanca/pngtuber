@@ -24,8 +24,21 @@ type CharacterConfig struct {
 	Offsets    map[string][]Offset       `toml:"offsets"`
 	Look       LookConfig                `toml:"look"`
 	Tracking   TrackingConfig            `toml:"tracking"`
+	Visibility VisibilityConfig          `toml:"visibility"`
+	Groups     map[string][]string       `toml:"groups"`
 	Variants   map[string]map[string]int `toml:"variants"`
 	Animations AnimationsConfig          `toml:"animations"`
+}
+
+// VisibilityConfig hides parts based on the committed hand state. The mouse
+// hand and keyboard hand are the same physical hand in two poses: only one
+// shows at a time (both show in edit mode). The mouse device and any part not
+// listed always stay visible.
+type VisibilityConfig struct {
+	// MouseHand parts are drawn only while the committed state is Mouse/Gaming.
+	MouseHand []string `toml:"mouse_hand"`
+	// KeyboardHand parts are drawn only while the mouse is NOT active.
+	KeyboardHand []string `toml:"keyboard_hand"`
 }
 
 // Offset is a part variant's position in the composition canvas (top-left

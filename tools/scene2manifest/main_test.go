@@ -63,10 +63,13 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 	nodes := []node{
 		{Name: "Body", Type: "Sprite2D", Pos: []float64{150, 68}, ZIndex: 0, Texture: "res://b.png", TexSize: []int{40, 40}},
 		{Name: "LeftHandUp", Type: "Sprite2D", Pos: []float64{100, 50}, ZIndex: 6, Texture: "res://l.png", TexSize: []int{20, 20}},
+		{Name: "MouseHandDown", Type: "Sprite2D", Pos: []float64{50, 50}, ZIndex: 4, Texture: "res://m.png", TexSize: []int{20, 20}},
+		{Name: "Eye", Type: "Sprite2D", Pos: []float64{30, 30}, ZIndex: 0, Texture: "res://e.png", TexSize: []int{10, 10}},
+		{Name: "Eyelid", Type: "Sprite2D", Pos: []float64{30, 30}, ZIndex: 1, Texture: "res://lid.png", TexSize: []int{10, 10}},
 	}
 	out := buildManifest(nodes, "test")
 	for _, want := range []string{
-		`parts_order = ["desk", "body", "keyboard", "mouse_dev", "left"]`,
+		`parts_order = ["desk", "body", "eye", "eyelid", "keyboard", "mouse_dev", "mouse", "left"]`,
 		`desk     = ["desk_1.png"]`,
 		`keyboard = ["keyboard_1.png"]`,
 		`mouse_dev = ["mouse_1.png"]`,
@@ -76,6 +79,11 @@ func TestBuildManifestEmitsDesk(t *testing.T) {
 		`breathing = { parts = ["body", "head"]`,
 		`press = { parts = ["left", "right"], duration_secs = 0.1, variant = 1 }`,
 		"[character.look]\nparts = []",
+		"[character.groups]",
+		`eyes = ["eye", "eyelid"]`,
+		"[character.visibility]",
+		`mouse_hand = ["mouse"]`,
+		`keyboard_hand = ["left"]`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)

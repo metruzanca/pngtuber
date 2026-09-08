@@ -18,12 +18,14 @@ keyboard. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap a
 
 Press **F2** to toggle a rig editor: drag any part with the mouse to reposition it, press **S**
 to save mid-session, and **Esc** to exit — **exiting auto-saves** the offsets back into the loaded
-`manifest.toml`. All of a part's variants shift together. The head/eyes do not track the cursor by
-default (see `[character.look] parts`).
+`manifest.toml`. Parts listed together in `[character.groups]` (e.g. the eye + eyelid) drag as one
+unit. All of a part's variants shift together. The head/eyes do not track the cursor by default
+(see `[character.look] parts`).
 
-The mouse hand and device follow the **real mouse** using the global input backend's relative
-motion (see `[character.tracking] sensitivity`), so they move even while the pngtuber window is
-unfocused.
+The mouse hand and left keyboard hand are the same physical hand: only the actively-used one shows
+(`[character.visibility]`), the mouse device stays visible at all times, and both poses are visible
+in edit mode. The mouse hand follows the **real mouse** via the global input backend's relative
+motion (see `[character.tracking] sensitivity`), so it moves even while the window is unfocused.
 
 ## Building
 

@@ -13,6 +13,13 @@ func testConfig() CharacterConfig {
 		Variants: map[string]map[string]int{
 			"eyelid": {"sleep": 1},
 		},
+		Visibility: VisibilityConfig{
+			MouseHand:    []string{"mouse"},
+			KeyboardHand: []string{"left"},
+		},
+		Groups: map[string][]string{
+			"eyes": {"eye", "eyelid"},
+		},
 		Animations: AnimationsConfig{
 			Mouth:             MouthAnimConfig{Part: "mouth", FPS: 10},
 			Press:             PressAnimConfig{Parts: []string{"left", "right"}, DurationSecs: 0.1, Variant: 1},

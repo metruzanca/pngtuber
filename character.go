@@ -129,14 +129,16 @@ func (r *Rig) normalize() {
 // during gaming pauses. Mouth (speech) and eyelid (sleep/blink) react to the
 // raw state immediately.
 type Character struct {
-	rig      *Rig
-	raw      ActivityState
-	hands    ActivityState
-	variants map[string]map[string]int
-	anim     AnimationsConfig
-	tracking TrackingConfig
-	look     LookConfig
-	mouth    frameLoop
+	rig        *Rig
+	raw        ActivityState
+	hands      ActivityState
+	variants   map[string]map[string]int
+	anim       AnimationsConfig
+	tracking   TrackingConfig
+	look       LookConfig
+	visibility VisibilityConfig
+	groups     map[string][]string
+	mouth      frameLoop
 
 	handTimer   float64
 	breathPhase float64
@@ -169,6 +171,8 @@ func NewCharacter(rig *Rig, cc CharacterConfig) *Character {
 		anim:       cc.Animations,
 		tracking:   cc.Tracking,
 		look:       cc.Look,
+		visibility: cc.Visibility,
+		groups:     cc.Groups,
 		pressTimer: map[string]float64{},
 		mouth:      frameLoop{fps: mouthFPS, nframes: len(rig.parts[cc.Animations.Mouth.Part])},
 	}
@@ -379,6 +383,41 @@ func (c *Character) HitPart(x, y int) (string, bool) {
 	return "", false
 }
 
+// PartGroup returns the parts that move together with part when dragged in
+// edit mode (the manifest [character.groups] containing it, or just itself).
+func (c *Character) PartGroup(part string) []string {
+	for _, members := range c.groups {
+		for _, m := range members {
+			if m == part {
+				return members
+			}
+		}
+	}
+	return []string{part}
+}
+
+// partVisible reports whether a part should be drawn. In edit mode everything
+// is visible so both hand poses can be positioned; otherwise the mouse hand
+// and the keyboard hand (the same physical hand) are mutually exclusive based
+// on the debounced committed state.
+func (c *Character) partVisible(part string) bool {
+	if c.steady {
+		return true
+	}
+	mouseActive := c.hands == Mouse || c.hands == Gaming
+	for _, p := range c.visibility.MouseHand {
+		if p == part {
+			return mouseActive
+		}
+	}
+	for _, p := range c.visibility.KeyboardHand {
+		if p == part {
+			return !mouseActive
+		}
+	}
+	return true
+}
+
 // ShiftPart moves every variant of a part by (dx, dy).
 func (c *Character) ShiftPart(part string, dx, dy int) {
 	for i := range c.rig.offsets[part] {
@@ -407,6 +446,9 @@ func (c *Character) Draw(screen *ebiten.Image, lookX, lookY float64) {
 	mouseActive := c.hands == Mouse || c.hands == Gaming
 
 	for _, part := range c.rig.order {
+		if !c.partVisible(part) {
+			continue
+		}
 		imgs := c.rig.parts[part]
 		if len(imgs) == 0 {
 			continue

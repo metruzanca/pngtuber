@@ -34,6 +34,17 @@ right     = [{ x = 112, y = 110 }, { x = 112, y = 96 }]
 mouse     = [{ x = 137, y = 106 }, { x = 137, y = 94 }]
 mouth     = [{ x = 84,  y = 100 }, { x = 84, y = 100 }, { x = 84, y = 100 }]
 
+# Parts that drag together in edit mode (eye + eyelid stay on the same spot).
+[character.groups]
+eyes = ["eye", "eyelid"]
+
+# The mouse hand and left keyboard hand are the same physical hand: only one
+# shows at a time in normal mode (both visible in edit mode). The mouse device
+# and right hand stay visible at all times.
+[character.visibility]
+mouse_hand = ["mouse"]
+keyboard_hand = ["left"]
+
 # Per-state variant mapping: part -> state -> variant index. States use the
 # activity names (idle, mouse, typing, gaming, talking, sleep); parts use 0
 # (default/calm variant) for any state not listed. Arms rest down by default

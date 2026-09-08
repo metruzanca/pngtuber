@@ -265,6 +265,20 @@ func buildManifest(nodes []node, skin string) string {
 	}
 
 	hasEyelid := parts["eyelid"] != nil
+	fmt.Fprintf(&b, "\n[character.groups]\n")
+	if parts["eye"] != nil && hasEyelid {
+		// The eye and eyelid sit together; edit mode drags them as one unit.
+		fmt.Fprintf(&b, "eyes = [\"eye\", \"eyelid\"]\n")
+	}
+
+	fmt.Fprintf(&b, "\n[character.visibility]\n")
+	if parts["mouse"] != nil {
+		fmt.Fprintf(&b, "mouse_hand = [\"mouse\"]\n")
+	}
+	if parts["left"] != nil {
+		fmt.Fprintf(&b, "keyboard_hand = [\"left\"]\n")
+	}
+
 	fmt.Fprintf(&b, "\n[character.variants]\n")
 	if hasEyelid {
 		fmt.Fprintf(&b, "eyelid = { sleep = 1 }\n")
