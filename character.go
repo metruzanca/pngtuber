@@ -151,6 +151,11 @@ type Character struct {
 	pressTimer map[string]float64
 	steady     bool // edit mode: pause breathing for stable dragging
 
+	// mouthOn is the live mic "in threshold" flag: the lip flap stops the
+	// instant audio drops below the threshold, independent of the held Talking
+	// state and mic hysteresis.
+	mouthOn bool
+
 	// mouse hand tracking (driven by global relative motion, focus-independent)
 	mouseOffX float64
 	mouseOffY float64
@@ -290,7 +295,17 @@ func (c *Character) SetState(s ActivityState) {
 		return
 	}
 	c.raw = s
-	c.mouth.reset()
+}
+
+// SetTalking updates the live mic "in threshold" flag that drives the mouth
+// animation. The lip flap starts as soon as the level is at/above the
+// threshold and stops immediately when it drops below — it does not wait for
+// the activity state machine's held Talking state or mic hysteresis.
+func (c *Character) SetTalking(on bool) {
+	if on && !c.mouthOn {
+		c.mouth.reset()
+	}
+	c.mouthOn = on
 }
 
 // Update advances the animation clocks by dt seconds (real elapsed time).
@@ -352,7 +367,7 @@ func (c *Character) variantIndex(part string) int {
 	if c.pressTimer[part] > 0 {
 		return c.anim.Press.Variant
 	}
-	if part == c.anim.Mouth.Part && c.raw == Talking {
+	if part == c.anim.Mouth.Part && c.mouthOn {
 		return c.mouth.index()
 	}
 	state := c.hands

@@ -128,12 +128,16 @@ func (g *Game) updateMic() {
 		return
 	}
 	g.micLevel = g.mic.Level()
-	talking := g.mic.Talking(g.cfg.Activity.MicThreshold, g.cfg.Activity.MicHysteresis)
+	threshold := g.cfg.Activity.MicThreshold
+	talking := g.mic.Talking(threshold, g.cfg.Activity.MicHysteresis)
 	if talking != g.micTalking {
 		log.Debugf("mic: talking=%v level=%.3f (threshold=%.2f)",
-			talking, g.micLevel, g.cfg.Activity.MicThreshold)
+			talking, g.micLevel, threshold)
 	}
 	g.micTalking = talking
+	// The lip flap tracks the raw threshold crossing so it stops the instant
+	// audio drops below the threshold (no hysteresis hold for the mouth).
+	g.char.SetTalking(g.micLevel >= threshold)
 	if time.Since(g.lastMicLog) >= 2*time.Second {
 		log.Debugf("mic: level=%.3f talking=%v", g.micLevel, talking)
 		g.lastMicLog = time.Now()

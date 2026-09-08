@@ -523,6 +523,12 @@ overlay and raises the log level to Debug). Logging moved from the stdlib `log` 
 `DEBU` — colors render when stderr is a terminal. Startup lines (assets, input devices, mic
 recording) still log normally, so the console stays readable during normal use.
 
+**Immediate lip-flap stop:** the mouth animation no longer keys off the held `Talking` activity
+state (which the machine keeps for `idle_after_secs` and mic hysteresis delays). `Character` now
+tracks a live `mouthOn` flag set from the **raw mic-threshold crossing** (`SetTalking(level >=
+threshold)`), so the lip flap starts as soon as audio is at/above the threshold and stops the
+instant it drops below — no hysteresis or state-machine hold for the mouth.
+
 **Asset note (added post-commit):** BitBuddy skins are **rig parts** (composited PNGs: body, head,
 eye, eyelid, hands, mouth shapes). The game's `BitBuddy.pck` (Godot 4.6) contains a `coworker_*.scn`
 scene per skin that defines exact part positions/z-order, so offsets are **auto-derived from the

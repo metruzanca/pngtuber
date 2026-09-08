@@ -127,27 +127,35 @@ func TestVariantSelectionMouth(t *testing.T) {
 	if got := c.variantIndex("mouth"); got != 0 {
 		t.Fatalf("non-talking mouth = %d, want 0 (closed)", got)
 	}
-	c.raw = Talking
+	c.SetTalking(true)
 	c.mouth.elapsed = 0.2
 	if got := c.variantIndex("mouth"); got != 2 {
 		t.Fatalf("talking mouth = %d, want 2", got)
 	}
+	// Dropping below threshold stops the flap immediately.
+	c.SetTalking(false)
+	if got := c.variantIndex("mouth"); got != 0 {
+		t.Fatalf("mouth after threshold drop = %d, want 0 (closed)", got)
+	}
 }
 
-func TestSetStateResetsAnimation(t *testing.T) {
+// TestSetTalkingResetsAnimation verifies the mouth loop resets when talking
+// starts and that the flap stops immediately when the mic drops out.
+func TestSetTalkingResetsAnimation(t *testing.T) {
 	c := testCharacter()
-	c.raw = Talking
+	c.SetTalking(true)
 	c.mouth.elapsed = 5.0
 	c.Update(0.05)
 	if c.mouth.index() == 0 {
 		t.Fatal("mouth loop should be past frame 0 before reset")
 	}
-	c.SetState(Idle)
-	if c.mouth.elapsed != 0 {
-		t.Errorf("mouth elapsed not reset, got %v", c.mouth.elapsed)
+	// Turning talking off stops the flap instantly (no held Talking state).
+	c.SetTalking(false)
+	if got := c.variantIndex("mouth"); got != 0 {
+		t.Errorf("mouth after stop = %d, want 0", got)
 	}
-	// Switching back to Talking starts the loop from 0 again.
-	c.SetState(Talking)
+	// Re-entering starts the loop from 0 again.
+	c.SetTalking(true)
 	if got := c.variantIndex("mouth"); got != 0 {
 		t.Errorf("mouth after re-enter = %d, want 0", got)
 	}
@@ -209,7 +217,7 @@ func TestHandMoveSleepInstant(t *testing.T) {
 
 func TestMouthInstantWhileHandsDebounced(t *testing.T) {
 	c := testCharacter()
-	c.SetState(Talking) // talking arrives, hands still committed to idle
+	c.SetTalking(true) // talking arrives, hands still committed to idle
 	c.Update(0.05)
 	if c.hands != Idle {
 		t.Fatalf("hands = %s, want idle (debounced)", c.hands)
@@ -219,6 +227,13 @@ func TestMouthInstantWhileHandsDebounced(t *testing.T) {
 	}
 	if got := c.variantIndex("left"); got != 0 {
 		t.Fatalf("left = %d, want 0 (hands not moved by talking)", got)
+	}
+	// The mouth is independent of the raw activity state: even while the
+	// machine would still report Talking (held), dropping the mic stops it.
+	c.SetState(Talking) // raw state says talking...
+	c.SetTalking(false) // ...but audio is below threshold
+	if got := c.variantIndex("mouth"); got != 0 {
+		t.Fatalf("mouth should stop despite held Talking state, got %d", got)
 	}
 }
 
