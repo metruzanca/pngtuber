@@ -1,0 +1,20 @@
+# pngtuber character manifest.
+# Editing this file changes behavior without recompiling.
+# Milestone 1: only the character block is used (placeholder sheet).
+
+[character]
+spritesheet = "assets/character/spritesheet.png"
+frame_size  = { width = 64, height = 64 }
+
+[character.states]
+idle    = { first = 0,  last = 0, fps = 1 }
+typing  = { first = 0,  last = 0, fps = 1 }
+mouse   = { first = 0,  last = 0, fps = 1 }
+gaming  = { first = 0,  last = 0, fps = 1 }
+talking = { first = 0,  last = 0, fps = 1 }
+sleep   = { first = 0,  last = 0, fps = 1 }
+
+[activity]
+idle_after_secs = 5.0
+sleep_after_secs = 120.0
+mic_threshold = 0.08

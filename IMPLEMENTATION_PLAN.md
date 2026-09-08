@@ -1,0 +1,309 @@
+# pngtuber Implementation Plan
+
+> **Language/engine:** This plan is written for **Go + Ebitengine** (`github.com/hajimehoshi/ebiten/v2`),
+> not Rust/Bevy. All sections below reflect the Go port. Progress is tracked by ticking off
+> milestones in [§6 Milestones](#6-milestones).
+
+pngtuber is an open-source, cross-platform (Linux-first) **input-reactive desktop avatar**.
+It renders a transparent, animated character that observes computer activity and mirrors the
+user's behavior:
+
+```
+Keyboard ──┐
+Mouse ─────┼──> Activity/Behavior State ──> Character Animation
+Microphone ┘
+                 │
+                 └──> Idle Timer ──> Sleep
+```
+
+Unlike a virtual pet, there is no gameplay. The computer's input activity *is* the source of
+behavioral state. Unlike a classic PNGTuber, the avatar reacts not only to the microphone but to
+global keyboard/mouse activity too. The window is intended to be captured by **OBS as a stream
+element** (positioned/scaled inside OBS), not used as a click-through desktop overlay.
+
+---
+
+## 1. Goals & Non-Goals
+
+### Goals
+- Cross-platform desktop avatar, with **Linux as a first-class citizen** (X11 native, Wayland via XWayland).
+- Transparent window that OBS can capture with full alpha (Game Capture + "Allow Transparency").
+- Real-time reactive animation driven by a small activity state machine.
+- Open source from day one; assets kept separate / replaceable.
+
+### Current progress
+- [x] Review + port plan to Go + Ebitengine (this doc)
+- [x] Milestone 1: Bootstrap + transparent window
+- [ ] Milestone 2: Global input pipeline
+- [ ] Milestone 3: Mic capture
+- [ ] Milestone 4: Activity state machine
+- [ ] Milestone 5: Character animation
+- [ ] Milestone 6: Config manifest
+- [ ] Milestone 7: Asset integration
+
+### Non-Goals (current phase)
+- Click-through window or always-on-top behavior (OBS positions the element).
+- Conventional game / virtual-pet mechanics (feeding, stats, minigames).
+- Voice *recognition* / STT. We only need voice *activity* (is the user talking) for now.
+- Sending/injecting input; observe-only.
+- A GUI settings panel in this phase (config is file-based).
+
+---
+
+## 2. Locked Decisions
+
+| Topic | Decision | Rationale |
+|---|---|---|
+| Engine | Ebitengine v2.9 (`github.com/hajimehoshi/ebiten/v2`) | Simple `Game` loop fits a single-sprite app; `ScreenTransparent` support. Desktop backend is cgo+GLFW (needs X11/GL headers) |
+| Window | Transparent, undecorated, normal window level | `RunGameOptions{ScreenTransparent:true}` + `SetWindowDecorated(false)`; OBS Game Capture handles placement; no click-through needed |
+| Global input (Linux) | `github.com/grafov/evdev`, polling `/dev/input/event*` | Works on X11 **and** Wayland; maintained fork of golang-evdev |
+| Global input (macOS/Windows) | Abstracted behind a `GlobalInputBackend`; initial backend Linux-only | Portable design without paying cross-platform costs up front |
+| Mic input | `github.com/jfreymuth/pulse` (pure Go, no cgo) | Engine is pure Go → keep the whole stack cgo-free; speaks PulseAudio/PipeWire native protocol |
+| Voice activity | Rolling RMS/peak amplitude → smoothed loudness + threshold | Lightweight; swap for real VAD later if needed |
+| Animation | `ebiten.Image` sheet + `SubImage(rect)` per frame, driven by elapsed time | No ECS/atlas; manual frame index ticking at each state's fps |
+| Cursor tracking | Track absolute cursor position (`ebiten.CursorPosition()`) | Native API; character can "look at" the mouse (resolves original open question) |
+| Config format | TOML (`github.com/BurntSushi/toml`) | Readable, comments supported, Go-friendly; replaces Bevy RON |
+| Assets | Not shipped yet | Animation config (manifest) is data-driven so real sheets drop in later |
+| OBS integration | Game Capture with "Allow Transparency" (X11); PipeWire Video on Wayland | Wayland only reachable via XWayland, so PipeWire is the more reliable transparent path there |
+
+**Wayland note:** Ebitengine dropped native Wayland in v2.6 (the `wayland` build tag was removed);
+Wayland sessions run through **XWayland**. This changes the original "X11 *and* Wayland first-class"
+claim — Wayland works but via the X compatibility layer, which affects OBS capture (see Risks §8).
+
+---
+
+## 3. Tech Stack
+
+| Concern | Choice | Notes |
+|---|---|---|
+| Engine / render | `github.com/hajimehoshi/ebiten/v2` v2.9 | Desktop backend uses cgo + GLFW: needs X11 + OpenGL dev headers at build time, GL libs at runtime (see shell.nix on NixOS) |
+| Linux input backend | `github.com/grafov/evdev` | Requires read access to `/dev/input/event*` (user in `input` group, or root) |
+| Mic capture | `github.com/jfreymuth/pulse` | Pure Go PulseAudio/PipeWire client; no system libs beyond a running Pulse server |
+| Config | `github.com/BurntSushi/toml` | Loads `manifest.toml`; data-driven states/thresholds |
+| Thread comms | Goroutines + `sync/atomic` / channels | Input goroutine → activity counters; audio callback → atomic loudness |
+| Animation | `ebiten.Image` + `SubImage(rect)`, elapsed-time frame stepping | Manual per-state frame controller |
+
+**System deps:** X11 + OpenGL C dev headers (cgo/GLFW backend) and GL runtime libs. On NixOS use
+`shell.nix`; on other distros install `libx11-dev`/`libgl-dev` equivalents. PulseAudio/PipeWire only
+needed for mic (Milestone 3+). No `libasound2-dev`/`alsa-lib-devel` required.
+
+---
+
+## 4. Project Structure
+
+```
+.
+├── go.mod / go.sum
+├── main.go               # Game struct: window setup, RunGameWithOptions, wire subsystems
+├── config.go             # Character manifest types + TOML loader (BurntSushi/toml)
+├── activity.go           # ActivityState enum, signal merging, idle timer, transitions
+├── input/
+│   ├── input.go          # GlobalInputBackend trait + ActivitySignals counters
+│   └── evdev_linux.go    # grafov/evdev polling (go:build linux)
+├── mic.go                # jfreymuth/pulse record stream -> smoothed loudness
+├── character.go          # sprite draw, state->frame controller, idle/sleep/cursor visuals
+├── window.go             # (optional) transparent window / RunGameOptions helper
+├── assets/
+│   └── character/
+│       ├── spritesheet.png
+│       └── manifest.toml # maps state names to frame ranges + fps
+└── README.md             # /dev/input perms, PulseAudio, OBS capture steps
+```
+
+> There is no ECS. The `Game` struct implements `ebiten.Game` (`Update`, `Draw`, `Layout`) and holds
+> plain fields for each subsystem; "events" (e.g. `StateChanged`) are delivered via channels or
+> direct method calls rather than an event bus.
+
+---
+
+## 5. Core Components
+
+### 5.1 Transparent window (`window.go` / `main.go`)
+
+Ebitengine's transparent-window path (equivalent of Bevy's `transparent_window` example):
+
+- `RunGameOptions{ScreenTransparent: true}` — equivalent of `ClearColor::NONE`.
+- `ebiten.SetWindowDecorated(false)` — undecorated.
+- `ebiten.SetWindowFloating(false)` — normal window level (OBS owns placement/size).
+- `ebiten.SetRunnableOnUnfocused(true)` — **critical**: keeps the game loop updating while another
+  app is focused (this is what enables global input reactivity).
+- `ebiten.SetVsyncEnabled(false)` optional later for low-latency capture.
+- Requires a compositor on X11 for alpha (same caveat as Bevy); document in README.
+
+**Milestone risk:** validate transparency in OBS on both X11 and Wayland(XWayland) first, before
+building the rest.
+
+### 5.2 Global input (`input/`)
+
+Observe-only input monitoring that works while other apps are focused.
+
+- Spawn a dedicated goroutine at startup.
+- Enumerate `/dev/input/event*`; select devices exposing keyboard keys (`EV_KEY`) or relative
+  axes/buttons (`EV_REL`, mouse `BTN_*`).
+- Classify each event into coarse signals and push into a bounded channel:
+  - `KeyActivity` (key down, ignore auto-repeat)
+  - `MouseActivity` (motion or button)
+- The `Update` loop drains the channel each tick into `ActivitySignals` (event counters + timestamp
+  of last activity).
+- **Backend interface** `GlobalInputBackend` so macOS (event taps) / Windows (low-level hooks) can be
+  added later without touching the activity layer.
+
+**Failure handling:** if `/dev/input` is unreadable (not in `input` group), log a clear,
+actionable warning and keep running in mic-only mode — never crash.
+
+**Docs:** permissions (`sudo usermod -aG input $USER`, re-login) go in README.
+
+### 5.3 Microphone (`mic.go`)
+
+- Connect to the default source via `jfreymuth/pulse` (`pulse.NewClient` + `NewRecord` with an
+  `Int16Writer` callback). Pure Go; speaks the PulseAudio/PipeWire native protocol.
+- Compute per-buffer RMS in the record callback; low-pass smooth into an atomic (`atomic.Uint32`
+  fixed point) to stay lock-free.
+- The `Update` loop samples it into `MicLevel` (0..1 loudness + derived `is_talking` boolean against a
+  configurable threshold with hysteresis).
+- If no PulseAudio/PipeWire server is reachable, log a clear warning and run without mic — never crash.
+
+### 5.4 Activity state machine (`activity.go`)
+
+```go
+type ActivityState int
+const (
+    Sleep   ActivityState = iota // long inactivity
+    Idle                         // no activity, brief
+    Typing                       // keyboard only
+    Mouse                        // mouse only
+    Gaming                       // keyboard + mouse within a short window
+    Talking                      // mic above threshold
+)
+```
+
+- Merge signals each tick in priority order (Talking > Gaming > Typing > Mouse > Idle > Sleep).
+- Idle timer counts real time since last *any* activity.
+  - `idle_after` → transition to `Idle`.
+  - `sleep_after` → transition to `Sleep`.
+  - Any activity resets the timer and wakes from sleep instantly.
+- Emits a `StateChanged(ActivityState)` (channel / callback) so character/animation code reacts cleanly.
+- All timings/thresholds live in `config.go`.
+
+### 5.5 Character & animation (`character.go`)
+
+- Load one sheet as an `ebiten.Image`; each state maps to a contiguous frame range `{ first, last, fps }`.
+- A `CharacterState` tracks the current state; on `StateChanged` the controller switches to the
+  mapped frame range (single sheet, contiguous cells per state).
+- Draw the current cell via `sheet.SubImage(frameRect)`; advance the frame index by **accumulated
+  elapsed time** (not raw tick count) so the manifest's fps is accurate regardless of `SetTPS`.
+  Loop within `first..=last`.
+- Cursor tracking: use `ebiten.CursorPosition()` to offset/angle the character toward the mouse
+  (resolves the original "presence-only vs track cursor" question → track cursor).
+- Rotation/blend between states is out of scope; switches are discrete for now (can soften later).
+
+### 5.6 Config / manifest (`config.go` + TOML)
+
+Assets arrive later, so the mapping is **data-driven**. TOML (replaces RON):
+
+```toml
+[character]
+spritesheet = "character/spritesheet.png"
+frame_size  = { width = 192, height = 192 }
+
+[character.states]
+idle    = { first = 0,  last = 11, fps = 8  }
+typing  = { first = 12, last = 23, fps = 12 }
+mouse   = { first = 24, last = 35, fps = 12 }
+gaming  = { first = 36, last = 47, fps = 15 }
+talking = { first = 48, last = 59, fps = 12 }
+sleep   = { first = 60, last = 71, fps = 6  }
+
+[activity]
+idle_after_secs = 5.0
+sleep_after_secs = 120.0
+mic_threshold = 0.08
+```
+
+Until a real sheet exists, ship a tiny placeholder (procedural frames or a single colored sprite)
+so the whole pipeline is testable end-to-end in OBS.
+
+---
+
+## 6. Milestones
+
+| # | Milestone | Deliverable | Exit criteria | Status |
+|---|---|---|---|---|
+| 1 | Bootstrap + transparent window | Ebitengine app, transparent undecorated window, test sprite, OBS guide stub | Window renders alpha correctly in OBS Game Capture (Allow Transparency) on X11 and Wayland(XWayland) | ✅ |
+| 2 | Global input pipeline | evdev goroutine → `ActivitySignals`; activity logged to console | Keystrokes/mouse motion while another app is focused flip counters; no crash without `/dev/input` perms | ☐ |
+| 3 | Mic capture | pulse → smoothed `MicLevel`, talking detection | Loudness moves with speech; threshold/hysteresis works; no audio server degrades gracefully | ☐ |
+| 4 | Activity state machine | `ActivityState` merge + idle/sleep timers, `StateChanged` events | Correct transitions observed with combined input/mic scenarios | ☐ |
+| 5 | Character animation | Sprite draw, state→frame controller, placeholder sheet, cursor tracking | Character switches animation per state, loops correctly, tracks cursor | ☐ |
+| 6 | Config manifest | TOML-driven states/thresholds + placeholder assets | Editing `manifest.toml` changes behavior without recompiling | ☐ |
+| 7 | Asset integration | Real sprite sheet wired in (when provided) | States map to real frames, tuned fps/priorities | ☐ |
+
+### Suggested order rationale
+Milestone 1 retires the single biggest technical risk (transparent capture) immediately.
+Milestones 2–4 build the state machine with console/log feedback before any visual polish.
+Milestone 5 adds the visuals on top of a working state machine. 6–7 make the whole thing asset-ready.
+
+---
+
+## 7. Testing Strategy
+
+- **Unit tests** where pure logic lives (`_test.go`):
+  - Activity merge + priority rules.
+  - Idle/sleep timer transitions (fake clock).
+  - Frame-range looping (wraparound at `last`).
+  - Cursor → state/angle mapping.
+- **Integration smoke test** (manual, scripted):
+  - Run app → type → move mouse → talk → go idle → sleep → wake. Verify each state visually.
+- **OBS validation checklist** per platform (X11 / Wayland(XWayland) / macOS / Windows when available).
+- CI later: `go vet ./...`, `go test ./...`, `gofmt -l .` on Linux.
+
+---
+
+## 8. Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Ebitengine Wayland is XWayland-only | Medium | Use PipeWire Video capture on Wayland (more reliable transparency); Game Capture on X11. Validate in Milestone 1 |
+| evdev requires `/dev/input` read perms | Medium | Clear README instructions (`input` group); graceful mic-only degradation + warning |
+| Wayland window capture in OBS | Medium | Primary X11 path is Game Capture transparency; document PipeWire Video capture for Wayland |
+| PulseAudio/PipeWire not running | Low | Log clear warning; degrade gracefully to input-only mode; README documents starting the daemon |
+| Real assets unknown format | Low | Data-driven manifest + `frame_size` config; assume standard sprite-sheet grid |
+| Transparent window needs compositor (X11) | Low | Document compositor requirement in README (same caveat as Bevy) |
+| cgo/GLFW build needs X11+OpenGL dev headers | Low | `shell.nix` on NixOS; documented `libx11-dev`/`libgl-dev` for other distros |
+
+---
+
+## 9. Open Questions
+
+- **Sprite orientation / art scale**: 2D front-facing static character (like a PNGTuber rig frame)
+  vs. animated directional? Affects whether "typing/gaming" needs multiple hand poses. Default
+  assumption: single sprite sheet, rows per state, character reacts in place.
+- **Lip sync fidelity**: is a talking/idle "talk" animation (mouth-open frames toggling at ~10 Hz
+  while loud) enough, vs. sample-accurate mouth shapes? Default: loudness-gated talk animation.
+- **Sleep visuals**: does "sleep" also hide/minimize the character (e.g., zzz particles) or simply
+  switch frames? Default: switch frames only (window must remain capturable).
+
+> Resolved in this revision: config format → **TOML**; mouse detail → **track cursor position**;
+> mic → **jfreymuth/pulse (pure Go)**; engine → **Ebitengine v2.9**.
+
+---
+
+## 10. First Implementation Slice (after review)
+
+Scaffolded the Go module with Ebitengine deps and implemented **Milestone 1** (done):
+
+1. `go.mod`: `github.com/hajimehoshi/ebiten/v2 v2.9.11` (Go 1.26).
+2. `main.go`: `Game` struct implementing `ebiten.Game`; transparent window via
+   `RunGameOptions{ScreenTransparent:true}`, `SetWindowDecorated(false)`,
+   `SetRunnableOnUnfocused(true)`.
+3. `character.go` logic folded into `main.go` for M1: loads a placeholder sprite sheet and draws a
+   test sprite (green circle on transparent), gently tracking the cursor.
+4. `config.go` + `assets/character/manifest.toml`: manifest types + placeholder asset.
+5. `shell.nix` (NixOS): X11/OpenGL dev headers + runtime GL libs for the cgo/GLFW build.
+6. `README.md`: permissions + OBS capture steps.
+7. Verified: `go build`, `go vet`, `gofmt` clean; app runs (smoke test via timeout, no errors).
+
+**Note found during M1:** Ebitengine's Linux desktop backend is **cgo + GLFW**, not pure Go — it
+needs X11/OpenGL dev headers to build and GL libs on the runtime loader path. The original
+"pure Go, no cgo" assumption was corrected in §2/§3 and handled via `shell.nix`.
+
+Next slice: **Milestone 2** — evdev goroutine → `ActivitySignals`, logged to console.
