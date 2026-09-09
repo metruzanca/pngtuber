@@ -4,7 +4,8 @@ BitBuddy (Steam, by Saltfish) ships its artwork in a single Godot 4.6 data
 pack, `BitBuddy.pck`. The artwork is **copyrighted** — pngtuber never ships or
 commits it. This page explains how to install a skin you own into pngtuber's
 user data directory using the committed tooling. You may of course supply your
-own rig parts instead (any PNGs + a `manifest.toml`).
+own rig parts instead — see [docs/custom-skins.md](custom-skins.md) for the
+complete manifest reference and part conventions.
 
 ## The pipeline
 

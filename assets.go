@@ -7,28 +7,40 @@
 //
 // Within it, a skin's manifest is <assets>/skins/<skin>/manifest.toml when a
 // skin is selected (PNGTUBER_SKIN or --skin), otherwise <assets>/manifest.toml.
-// If no manifest exists, fall back to the committed placeholder
-// (assets/character/manifest.toml) and log which directory was used, so
-// `go run .` works out of the box. Real (copyrighted) skins are never shipped
-// in the repo — they live in the user data dir.
+// If no manifest exists, fall back to the built-in placeholder
+// (assets/character/* embedded into the binary) and log which source was
+// used, so `go run .` and released binaries work out of the box. Real
+// (copyrighted) skins are never shipped in the repo — they live in the user
+// data dir.
 package main
 
 import (
+	"embed"
 	"fmt"
-	"github.com/charmbracelet/log"
+	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/BurntSushi/toml"
+	"github.com/charmbracelet/log"
 )
 
-// placeholderManifest is the committed test rig shipped in the repo.
+//go:embed assets/character/*
+var placeholderFS embed.FS
+
+// placeholderManifest is the embedded test rig's manifest path (relative to
+// placeholderFS).
 const placeholderManifest = "assets/character/manifest.toml"
 
 // AssetDirs is the resolved manifest path plus the directory part files
-// resolve against (the manifest's own directory).
+// resolve against (the manifest's own directory). FS is non-nil when loading
+// the embedded placeholder, in which case BaseDir/ManifestPath are relative
+// to FS; a nil FS means normal OS filesystem paths.
 type AssetDirs struct {
 	ManifestPath string
 	BaseDir      string
 	Source       string // description for the startup log
+	FS           fs.FS  // non-nil => load from the embedded placeholder
 }
 
 // ResolveAssets determines the manifest to load from the environment/flags,
@@ -67,8 +79,8 @@ func ResolveAssets(assetsFlag, skinFlag string) AssetDirs {
 			log.Warnf("assets: no manifest at %s; falling back to placeholder", candidate)
 		}
 	}
-	log.Infof("assets: using placeholder at %s", placeholderManifest)
-	return AssetDirs{ManifestPath: placeholderManifest, BaseDir: filepath.Dir(placeholderManifest), Source: "placeholder"}
+	log.Infof("assets: using built-in placeholder")
+	return AssetDirs{ManifestPath: placeholderManifest, BaseDir: "assets/character", Source: "built-in placeholder", FS: placeholderFS}
 }
 
 // defaultAssetsDir returns $XDG_DATA_HOME/pngtuber/assets (or
@@ -87,4 +99,27 @@ func defaultAssetsDir() string {
 func fileExists(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && !fi.IsDir()
+}
+
+// LoadConfigFS reads and parses a manifest from an fs.FS (used for the
+// embedded placeholder). Path is relative to the root of the FS.
+func LoadConfigFS(fsys fs.FS, path string) (*Config, error) {
+	data, err := fs.ReadFile(fsys, path)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+	var cfg Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	return &cfg, nil
+}
+
+// LoadConfigFrom loads the manifest from res, reading from the embedded
+// placeholder FS when res.FS is non-nil, otherwise from the OS filesystem.
+func LoadConfigFrom(res AssetDirs) (*Config, error) {
+	if res.FS != nil {
+		return LoadConfigFS(res.FS, res.ManifestPath)
+	}
+	return LoadConfig(res.ManifestPath)
 }

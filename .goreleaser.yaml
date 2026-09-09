@@ -1,0 +1,53 @@
+# goreleaser v2 — Linux-only releases.
+#
+# The placeholder rig is embedded in the binary (assets.go), so releases are
+# fully self-contained: `pngtuber` runs with the built-in test character out of
+# the box and loads real skins from the user data dir at runtime. The cgo build
+# (Ebitengine/GLFW + grafov/evdev) needs X11/GL headers and linux headers on the
+# build machine — the release workflow installs them before running goreleaser.
+version: 2
+
+project_name: pngtuber
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: pngtuber
+    main: .
+    binary: pngtuber
+    env:
+      - CGO_ENABLED=1
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+    goos:
+      - linux
+    goarch:
+      - amd64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - docs/custom-skins.md
+      - docs/bitbuddy-assets.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^refactor:"

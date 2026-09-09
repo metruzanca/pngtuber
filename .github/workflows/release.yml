@@ -1,0 +1,45 @@
+# Builds a release from any `v*` git tag (e.g. v0.1.0) and publishes it as a
+# GitHub Release with the built Linux binary, checksums, and docs.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Ebitengine/GLFW + grafov/evdev are cgo builds: they need the X11, GL,
+      # and Linux kernel headers at compile time (no X server needed).
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxi-dev libxxf86vm-dev libgl1-mesa-dev libglvnd-dev \
+            pkg-config linux-libc-dev
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

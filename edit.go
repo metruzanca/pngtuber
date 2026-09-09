@@ -107,10 +107,15 @@ func (g *Game) setEditMode(on bool) {
 }
 
 // saveOffsets writes the current rig offsets into the manifest's
-// [character.offsets] section, preserving the rest of the file.
+// [character.offsets] section, preserving the rest of the file. The built-in
+// placeholder is embedded and read-only; installing a skin under the user data
+// directory (or copying the placeholder there) makes a skin editable.
 func (g *Game) saveOffsets() error {
+	if g.embedded {
+		return errors.New("the built-in placeholder is read-only; install a skin under the user data dir (see docs/custom-skins.md)")
+	}
 	if g.manifestPath == "" {
-		return errors.New("no manifest path (placeholder loaded from embedded config?)")
+		return errors.New("no manifest path to save to")
 	}
 	if err := writeOffsets(g.manifestPath, g.char.rig.order, g.char.rig.offsets); err != nil {
 		return err

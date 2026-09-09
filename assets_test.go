@@ -36,11 +36,35 @@ func TestResolveAssetsUserSkin(t *testing.T) {
 		t.Fatalf("env ManifestPath = %q, want %q", res.ManifestPath, manifest)
 	}
 
-	// Skin missing -> falls back to placeholder.
+	// Missing skin / empty dir fall back to the embedded placeholder, not the
+	// CWD-relative repo path.
 	t.Setenv("PNGTUBER_SKIN", "nope")
 	res = ResolveAssets("", "")
 	if res.ManifestPath != placeholderManifest {
 		t.Fatalf("missing-skin ManifestPath = %q, want placeholder %q", res.ManifestPath, placeholderManifest)
+	}
+	if res.FS == nil {
+		t.Fatal("missing-skin placeholder should load from the embedded FS")
+	}
+	cfg, err := LoadConfigFrom(res)
+	if err != nil {
+		t.Fatalf("LoadConfigFrom(placeholder): %v", err)
+	}
+	if cfg.Character.Skin != "placeholder" {
+		t.Fatalf("placeholder skin = %q, want %q", cfg.Character.Skin, "placeholder")
+	}
+	rig, err := LoadRigFrom(res, cfg)
+	if err != nil {
+		t.Fatalf("LoadRigFrom(placeholder): %v", err)
+	}
+	w, h := rig.Canvas()
+	if w <= 0 || h <= 0 {
+		t.Fatalf("placeholder rig canvas = %dx%d, want > 0", w, h)
+	}
+	for _, part := range []string{"body", "head", "left", "right", "mouse", "mouth", "eyelid"} {
+		if len(rig.parts[part]) == 0 {
+			t.Fatalf("placeholder rig missing part %q", part)
+		}
 	}
 
 	// Root manifest (no skin) is used when present.

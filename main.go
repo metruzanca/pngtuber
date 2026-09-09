@@ -16,6 +16,13 @@ const (
 	screenH = 192
 )
 
+// version is injected at build time via goreleaser ldflags (default "dev").
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 // Game is the top-level Ebitengine game. Milestones 1-4 wired the transparent
 // window, global input, mic, and the activity state machine; Milestone 5 added
 // the rig character; Milestone 6 made the manifest fully data-driven; M7 loads
@@ -28,6 +35,7 @@ type Game struct {
 	mic          *Mic
 	act          *Activity
 	manifestPath string
+	embedded     bool // true when running the built-in placeholder (read-only)
 	edit         editState
 
 	micLevel   float64
@@ -45,12 +53,12 @@ type Game struct {
 func NewGame(assetsFlag, skinFlag string, debug bool) (*Game, error) {
 	res := ResolveAssets(assetsFlag, skinFlag)
 	log.Infof("assets: loading %s", res.Source)
-	cfg, err := LoadConfig(res.ManifestPath)
+	cfg, err := LoadConfigFrom(res)
 	if err != nil {
 		return nil, err
 	}
 
-	rig, err := LoadRig(cfg, res.BaseDir)
+	rig, err := LoadRigFrom(res, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +69,7 @@ func NewGame(assetsFlag, skinFlag string, debug bool) (*Game, error) {
 		char:         NewCharacter(rig, cfg.Character),
 		act:          NewActivity(cfg.Activity, now),
 		manifestPath: res.ManifestPath,
+		embedded:     res.FS != nil,
 		lastFrame:    now,
 		debug:        debug,
 	}
@@ -197,8 +206,15 @@ func main() {
 	assetsFlag := flag.String("assets", "", "assets directory (overrides PNGTUBER_ASSETS)")
 	skinFlag := flag.String("skin", "", "skin name under <assets>/skins (overrides PNGTUBER_SKIN)")
 	debugFlag := flag.Bool("debug", false, "show the in-window status overlay and verbose input/mic logs")
+	versionFlag := flag.Bool("version", false, "print the pngtuber version and exit")
 	flag.Parse()
 
+	if *versionFlag {
+		fmt.Printf("pngtuber %s (commit %s, built %s)\n", version, commit, date)
+		return
+	}
+
+	log.Infof("pngtuber %s — input-reactive desktop avatar", version)
 	if *debugFlag {
 		log.SetLevel(log.DebugLevel)
 	}

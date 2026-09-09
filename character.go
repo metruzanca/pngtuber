@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/png"
+	"io/fs"
 	"math"
 	"path/filepath"
 
@@ -62,10 +63,42 @@ func (r *Rig) Canvas() (int, int) { return r.canvasW, r.canvasH }
 const hiddenVariant = "-"
 
 // LoadRig loads every part variant from the manifest, resolving relative
-// filenames against baseDir. The hiddenVariant marker ("-") maps to a nil
-// image that Draw skips. Offsets are normalized so the rig starts at (0,0)
-// and the canvas is sized to the parts' bounding box.
+// filenames against baseDir on the OS filesystem. The hiddenVariant marker
+// ("-") maps to a nil image that Draw skips. Offsets are normalized so the rig
+// starts at (0,0) and the canvas is sized to the parts' bounding box.
 func LoadRig(cfg *Config, baseDir string) (*Rig, error) {
+	return loadRig(cfg, func(f string) (*ebiten.Image, error) {
+		img, _, err := ebitenutil.NewImageFromFile(filepath.Join(baseDir, f))
+		return img, err
+	})
+}
+
+// LoadRigFS loads the rig from an fs.FS (used for the embedded placeholder);
+// baseDir is relative to the root of the FS.
+func LoadRigFS(fsys fs.FS, cfg *Config, baseDir string) (*Rig, error) {
+	return loadRig(cfg, func(f string) (*ebiten.Image, error) {
+		rc, err := fsys.Open(filepath.Join(baseDir, f))
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		img, _, err := ebitenutil.NewImageFromReader(rc)
+		return img, err
+	})
+}
+
+// LoadRigFrom loads the rig from res, reading from the embedded placeholder
+// FS when res.FS is non-nil, otherwise from the OS filesystem.
+func LoadRigFrom(res AssetDirs, cfg *Config) (*Rig, error) {
+	if res.FS != nil {
+		return LoadRigFS(res.FS, cfg, res.BaseDir)
+	}
+	return LoadRig(cfg, res.BaseDir)
+}
+
+// loadRig is the shared rig loader: it builds the parts table by calling load
+// for each part variant filename.
+func loadRig(cfg *Config, load func(string) (*ebiten.Image, error)) (*Rig, error) {
 	r := &Rig{
 		order:   cfg.Character.PartsOrder,
 		parts:   make(map[string][]*ebiten.Image, len(cfg.Character.Parts)),
@@ -78,7 +111,7 @@ func LoadRig(cfg *Config, baseDir string) (*Rig, error) {
 				r.parts[name] = append(r.parts[name], nil)
 				continue
 			}
-			img, _, err := ebitenutil.NewImageFromFile(filepath.Join(baseDir, f))
+			img, err := load(f)
 			if err != nil {
 				return nil, fmt.Errorf("load part %q (%s): %w", name, f, err)
 			}
