@@ -1,6 +1,6 @@
 # Simple PNGTuber
 
-![](.github/pngtuber-demo.webm)
+![](.github/pngtuber-demo.gif)
 
 An open-source, Linux-first **input-reactive desktop avatar**. It renders a
 transparent, animated character that watches your computer activity
