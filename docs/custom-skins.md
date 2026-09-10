@@ -36,7 +36,7 @@ Within the assets dir, a skin is a folder under `skins/`:
 Pick it with `pngtuber --skin my_avatar` (or `PNGTUBER_SKIN=my_avatar`). A
 `manifest.toml` at the top of the assets dir itself is used when no skin is
 selected. To start from the built-in placeholder, copy its files from the repo
-(`assets/character/*`) into your skin folder and edit from there — that copy is
+(`internal/app/assets/character/*`) into your skin folder and edit from there — that copy is
 editable, the embedded one is read-only.
 
 ## 2. The parts
@@ -203,7 +203,7 @@ character looks alive while idle.
 ## 5. Minimal working skin, step by step
 
 Start a folder `~/.local/share/pngtuber/assets/skins/demo/`. Copy the
-placeholder PNGs from the repo's `assets/character/` as a base and trim the
+placeholder PNGs from the repo's `internal/app/assets/character/` as a base and trim the
 manifest down — or draw your own 32×32 shapes and tweak offsets.
 
 **Step 1 — a body only:**

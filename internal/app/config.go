@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Config is the data-driven character manifest (assets/character/manifest.toml).
+// Config is the data-driven character manifest (manifest.toml).
 type Config struct {
 	Character CharacterConfig `toml:"character"`
 	Activity  ActivityConfig  `toml:"activity"`

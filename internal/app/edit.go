@@ -11,7 +11,7 @@
 //
 // Saving rewrites only the [character.offsets] section of the manifest file,
 // so comments and every other table are preserved.
-package main
+package app
 
 import (
 	"errors"

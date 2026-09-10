@@ -9,7 +9,7 @@
 // recompiling. Variant sequences animate by accumulated elapsed time so the
 // manifest's fps is honored regardless of the game's TPS. The head/eye parts
 // track the cursor via a capped look offset.
-package main
+package app
 
 import (
 	"fmt"

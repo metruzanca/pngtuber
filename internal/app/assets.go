@@ -12,7 +12,7 @@
 // used, so `go run .` and released binaries work out of the box. Real
 // (copyrighted) skins are never shipped in the repo — they live in the user
 // data dir.
-package main
+package app
 
 import (
 	"embed"
@@ -28,8 +28,8 @@ import (
 //go:embed assets/character/*
 var placeholderFS embed.FS
 
-// placeholderManifest is the embedded test rig's manifest path (relative to
-// placeholderFS).
+// placeholderManifest is the path inside placeholderFS (the embedded
+// placeholder's manifest).
 const placeholderManifest = "assets/character/manifest.toml"
 
 // AssetDirs is the resolved manifest path plus the directory part files

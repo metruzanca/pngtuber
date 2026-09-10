@@ -7,7 +7,7 @@
 // goes Idle, after sleep_after_secs Sleep. Any activity resets the timer and
 // wakes from sleep instantly. State transitions are delivered via an optional
 // callback so animation code can react cleanly.
-package main
+package app
 
 import (
 	"time"

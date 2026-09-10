@@ -8,7 +8,7 @@
 //
 // If no audio server is reachable we log a clear warning and run without a
 // mic — never crash.
-package main
+package app
 
 import (
 	"github.com/charmbracelet/log"
