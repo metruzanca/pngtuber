@@ -1,136 +1,67 @@
-# pngtuber
+# Simple PNGTuber
 
 An open-source, Linux-first **input-reactive desktop avatar**. It renders a
 transparent, animated character that watches your computer activity
-(keyboard, mouse, microphone) and mirrors your behavior — hands type when you
-type, the mouse hand reaches toward your cursor, the mouth flaps when you
-talk, and it falls asleep when you walk away. Capture it as a stream element
-in OBS.
+(keyboard, mouse, microphone) and mirrors your behavior.
 
 **v0.1.0** — releases: [Releases](https://github.com/metruzanca/pngtuber/releases)
 
-## Assets & licensing — please read
-
-pngtuber is an **original implementation** of the input-reactive desktop-pet
-concept. It does **not ship or bundle any BitBuddy artwork or assets** — those
-belong to their respective owners (BitBuddy is © Saltfish) and are **not**
-redistributed here.
-
-- You provide your own artwork. Any `PNG` parts + a `manifest.toml` work.
-- Finished releases contain only your assets plus the tiny built-in test
-  rig, so people download *your* character — never someone else's.
-- **It so happens the rig format is compatible with BitBuddy's.** If you own
-  a copy of BitBuddy, the included tooling can extract and convert its skins
-  into this format — see [docs/bitbuddy-assets.md](docs/bitbuddy-assets.md)
-  and use it at your own discretion (don't redistribute it).
+## Features
+- **Typing** the hands lift onto the keys per keystroke.
+- **Mouse** the mouse hand appears the instant the real mouse moves (even
+  when the window is unfocused) and stretches toward the cursor; it returns
+  to the keyboard after you stop.
+- **Gaming** keys + mouse together drive both hands.
+- **Talking** the mouth flaps while the mic level is above the threshold,
+  and stops the instant you go quiet.
+- **Idle / sleep** the character breathes, then closes its eyes.
+- Easy to capture via OBS
 
 Build your own skins with the full manifest reference in
-[docs/custom-skins.md](docs/custom-skins.md).
+[docs/custom-skins.md](docs/custom-skins.md) or import one from [BitBuddy](docs/bitbuddy-assets.md) (Requires a copy of Bitbuddy).
 
 ## Install & run
 
 Grab the latest binary from the
-[Releases page](https://github.com/metruzanca/pngtuber/releases) (Linux
-amd64; builds require X11/GL runtime libraries as on any Ebitengine app), or
-build from source:
+[Releases page](https://github.com/metruzanca/pngtuber/releases).
 
-```sh
-nix-shell          # NixOS: provides X11/GL headers + runtime GL libs
-go build ./...
-go run .
+To use your own character, drop it into the user assets dir (`~/.local/share/pngtuber/assets/skins/<name>/`) and select it with the `--skin` flag or set the `PNGTUBER_SKIN` env var.
+Asset folder can be changed with `--assets` flag or setting `PNGTUBER_ASSETS`.
+
+## Troubleshooting
+
+The prebuilt binary needs a few X11/GL runtime libraries. Most desktops already have these; if the app won't start, grab them for your distro:
+
+<details>
+<summary>Debian / Ubuntu</summary>
 ```
-
-First run shows the **built-in test rig** so the app works out of the box.
-To use your own character, drop it into the user assets dir and select it:
-
-```sh
-# ~/.local/share/pngtuber/assets/skins/<name>/
-pngtuber --skin my_avatar
+sudo apt install libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6 libxxf86vm1 libgl1 libglvnd0
 ```
+</details>
 
-Run `pngtuber --version` to check the build; `--debug` adds an in-window
-status overlay (state + input/mic counters) and verbose console logs.
-
-### How the character behaves
-
-- **Typing** — the hands lift onto the keys per keystroke.
-- **Mouse** — the mouse hand appears the instant the real mouse moves (even
-  when the window is unfocused) and stretches toward the cursor; it returns
-  to the keyboard after you stop.
-- **Gaming** — keys + mouse together drive both hands.
-- **Talking** — the mouth flaps while the mic level is above the threshold,
-  and stops the instant you go quiet.
-- **Idle / sleep** — the character breathes, then closes its eyes.
-
-### Flags
-
-| Flag                    | Meaning                                        |
-|-------------------------|------------------------------------------------|
-| `--skin <name>`         | Skin under `<assets>/skins/` (env `PNGTUBER_SKIN`) |
-| `--assets <dir>`        | Assets directory (env `PNGTUBER_ASSETS`)       |
-| `--debug`               | Status overlay + verbose logging               |
-| `--version`             | Print the build version and exit               |
-
-Press **F2** for the rig editor (drag parts, `S` save, `Esc` exit — auto-saves
-offsets back into the manifest). Both hands are drawn in edit mode.
-
-## OBS capture
-
-The character window is meant to be captured as a stream element, not used as
-a desktop overlay.
-
-### X11
-1. Start a compositor (transparency needs one) if not already running (`picom`).
-2. In OBS, add a **Window Capture (XComposite)** or **Game Capture** source
-   pointed at the pngtuber window.
-3. Enable **Allow Transparency** on the source.
-
-### Wayland
-Ebitengine runs via **XWayland** on Wayland sessions, so use OBS's **PipeWire
-Video** capture window and select the pngtuber window. Transparency is
-preserved by the compositor.
-
-## Permissions
-
-Global keyboard/mouse observation reads `/dev/input/event*`. Ensure your user
-is in the `input` group, then re-log in:
-
-```sh
-sudo usermod -aG input $USER
+<details>
+<summary>Fedora</summary>
 ```
+sudo dnf install libX11 libXrandr libXinerama libXcursor libXi libXxf86vm mesa-libGL libglvnd
+```
+</details>
 
-## Microphone
+<details>
+<summary>Arch Linux</summary>
+```
+sudo pacman -S libx11 libxrandr libxinerama libxcursor libxi libxxf86vm mesa libglvnd
+```
+</details>
 
-Voice-activity detection uses `jfreymuth/pulse` (pure Go), which needs a
-running PulseAudio or PipeWire (Pulse-compatible) server — the default on most
-desktop distros. The mic merely measures loudness; no audio leaves your machine.
+For **Keyboard/Mouse** observation reads `/dev/input/event*`. Ensure your user is in the `input` group, then re-log in. (`sudo usermod -aG input $USER`)
 
-## Configuration & data files
+For **Voice-activity** detection needs a running PulseAudio or PipeWire (Pulse-compatible) server.
 
-Everything is data-driven: a `manifest.toml` defines the rig (parts,
-scene-derived offsets, z-order, per-state variant mapping, animations, cursor
-look) plus activity timings/thresholds. Editing it changes behavior without
-recompiling.
+## Assets & licensing — please read
 
-Assets resolve in this order:
+pngtuber is an **original implementation** of the input-reactive desktop-pet
+concept. It does **not ship or bundle any BitBuddy artwork or assets**, those
+belong to their respective owners (BitBuddy is © Saltfish) and are **not**
+redistributed here. You provide your own artwork. Any `PNG` parts + a `manifest.toml` work.
 
-1. `PNGTUBER_ASSETS` env var or `--assets` flag
-2. `$XDG_DATA_HOME/pngtuber/assets` (default `~/.local/share/pngtuber/assets`)
-3. The built-in embedded placeholder (annotated as such at startup)
-
-## Releases & development
-
-- **Releases** are cut from `v*` git tags by the
-  [GitHub Actions workflow](.github/workflows/release.yml) driving
-  [goreleaser](.goreleaser.yaml) (Linux, archive + checksums). Tag and push:
-  `git tag v0.1.0 && git push origin v0.1.0`.
-- Development shell: `nix-shell` (see `shell.nix`); the CI-equivalent checks are
-  `go test ./... && go vet ./... && go build ./... && gofmt -l .`.
-- Roadmap: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
-
-## Documentation
-
-- [docs/custom-skins.md](docs/custom-skins.md) — create your own skin: the
-  full manifest reference, part conventions, and a worked example.
-- [docs/bitbuddy-assets.md](docs/bitbuddy-assets.md) — extract + convert a
-  BitBuddy copy you own into a pngtuber skin.
+BitBuddy does not support Linux and lots of effort is required to get it to work even under wine, so this project exists to fill in that blank. Theoretically, the author of Bitbuddy would be able to make it work underlinux with [godot-evdev](https://github.com/ShadowBlip/godot-evdev), but until then, this project exists. If Bitbuddy/saltfish has any issue with this app, feel free to contact me.
